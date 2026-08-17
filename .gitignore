@@ -42,7 +42,7 @@ vite.config.ts.*
 
 # Editor directories and files
 .idea
-# .vscode
+.vscode/
 *.suo
 *.ntvs*
 *.njsproj
@@ -50,6 +50,11 @@ vite.config.ts.*
 *.sw?
 .history
 .cursor
+
+# Repository metadata not used by Starjet SOC
+.changeset/
+.github/
+.dockerignore
 
 # AI
 .agent
