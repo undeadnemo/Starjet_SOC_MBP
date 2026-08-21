@@ -49,3 +49,40 @@ body.embedded .app-shell{min-height:100vh}
 @media(max-width:1180px){.workspace{grid-template-columns:minmax(0,1fr) 300px}.export-material-grid{grid-template-columns:1fr}.rightbar{display:block;padding:22px 16px}.rightbar .side-section{margin-bottom:27px}}
 @media(max-width:900px){.workspace{display:block}.rightbar{position:static;display:grid;grid-template-columns:1fr 1fr;max-height:none;border-left:0;border-top:1px solid var(--line)}.rightbar .side-section{margin:0}.content{padding:24px 18px}.tab-panel+.tab-panel{margin-top:40px;padding-top:32px}}
 @media(max-width:760px){.rightbar{grid-template-columns:1fr}.export-material{grid-template-columns:42px minmax(0,1fr);padding:15px}.export-material>button{grid-column:2;justify-self:start}.tabs .tab{flex:0 0 94px}.tab-panel{scroll-margin-top:10px}}
+
+/* Starjet Mission Control Dark */
+:root{--ink:#eef3f8;--muted:#78859a;--line:#252d3d;--soft:#111722;--navy:#07090e;--blue:#55a8ff;--teal:#35c7b4;--green:#a3e635;--orange:#f5b942;--red:#ff665c;--white:#f8fafc;--shadow:0 10px 28px rgba(0,0,0,.22)}
+html{background:#07090e;color-scheme:dark}
+body{color:var(--ink);background:#07090e}
+.app-shell,main{background:#07090e}
+.topbar{color:#dbe3ee;background:#080b11;border-bottom-color:var(--line)}
+.crumbs,.back-btn{color:#7d899d}.crumbs strong{color:#d9e1ec}.text-icon,.more-btn{color:#9aa6b8;border-color:#2a3345;background:#0e131c}
+.trip-strip{background:#090d13;border-bottom-color:var(--line)}
+.trip-summary strong{color:#f3f6fa}.trip-summary small{color:#69768a}
+.leg-card{border-color:#283143;color:#dce4ef;background:#0d121b;box-shadow:none}.leg-card:hover{border-color:#44516a;background:#111824}.leg-card.active{border-color:var(--blue);color:#eff7ff;background:#101c2a;box-shadow:0 0 0 1px rgba(85,168,255,.28),0 0 22px rgba(85,168,255,.09)}.leg-card.completed:before{color:#101807;background:var(--green)}
+.leg-pager button{border-color:#2a3345;color:#bdc7d6;background:#0e131c}
+.flight-head{background:#080b11;border-bottom-color:var(--line)}
+.flight-label{color:#8390a3}.status-dot{background:var(--blue);box-shadow:0 0 9px rgba(85,168,255,.55)}.trip-type{color:#101807;background:var(--green)}
+.airport h1,.airport time{color:#f7f9fc}.airport p,.route-line{color:#728095}.route-line i{background:#344057}.route-line b{background:#17395c!important;box-shadow:0 0 18px rgba(85,168,255,.2)}
+.head-meta{border-left-color:var(--line)}.head-meta div span{color:#6e7a8d}.head-meta strong{color:#e9eef5}.warn{color:#f4bd63;background:#3a2a12}.time-toggle{border-color:#303a4c;color:#edf2f8;background:#111722}.time-toggle span{color:#758196}
+.ring{background:conic-gradient(var(--green) 0 82%,#242c39 82%);box-shadow:0 0 30px rgba(163,230,53,.08)}.ring:before{background:#090c12}.ring strong{color:#f7f9fc}.readiness-dial p{color:var(--red)}
+.tabs{background:#090c12;border-bottom-color:var(--line);box-shadow:0 8px 26px rgba(0,0,0,.2)}.tab{color:#78859a}.tab:hover{color:#d7dfeb;background:#10151f}.tab.active{color:var(--blue)}.tab.active:after{background:var(--blue);box-shadow:0 0 10px rgba(85,168,255,.45)}.tab b{color:#9ca8b8;background:#1b2230}
+.workspace{background:#080b11}.content{background:#080b11}.rightbar{border-left-color:var(--line);background:#0a0e15}
+.section-heading p{color:var(--blue)}.section-heading h2{color:#f3f6fa}.section-heading>span,.section-intro{color:#748195}
+.card,.mini-card{border-color:var(--line);background:#0d121b;box-shadow:var(--shadow)}.card-title{border-bottom-color:var(--line)}.card-title h3{color:#ecf1f7}.card-title span,.card-title button{color:#758196}
+.badge.blue{color:var(--blue);background:rgba(85,168,255,.12)}.badge.green{color:var(--green);background:rgba(163,230,53,.12)}
+.track-base{background:#344057}.track-base span{border-color:var(--blue);background:#0d121b}.milestone b{color:#dfe6ef}.milestone span{color:#718096}.milestone.main b{color:var(--blue)}.slot-strip{color:#d3dbe6;background:#111924}.slot-strip>span{color:var(--blue)}
+.readiness-row,.action-item,.mini-head,.crew-line,.service-row,.tr,.task-row,.doc-row{border-bottom-color:#202734}.readiness-row>span:nth-child(2),.progress{background:#242d3b}.action-item h4,.mini-head h3,.crew-line b{color:#edf2f8}.action-item p{color:#748195}.action-item button{color:#68758a}
+.mini-head>span{display:none}.mini-stats p{border-color:#202734}.mini-stats span{color:#748195}.mini-stats b{color:#dfe6ef}
+.side-title h3{color:#eef2f7}.side-title>span{color:#96a2b3;background:#1c2430}.risk,.release{border-color:var(--line);background:#0d121b;box-shadow:0 8px 22px rgba(0,0,0,.18)}.risk h4,.release-line{color:#e9eef5}.risk p,.release-reason p{color:#748195}.release-btn{color:#667184;background:#242b36}
+.primary-btn,.export-material>button{border-color:var(--green);color:#101607;background:var(--green)}.primary-btn:hover,.export-material>button:hover{border-color:#b9f463;color:#0a1004;background:#b9f463}
+.details-grid span,.aircraft-data span{color:#718095}.details-grid b,.aircraft-data b{color:#e7edf5}.aircraft-hero{background:#0a1019}.aircraft-data .issue{background:#271d10}
+.tr.th,.task-row.header{color:#778499;background:#111722}.status{background:#1a222f}.status.ready{color:var(--green);background:rgba(163,230,53,.1)}.status.warning{color:var(--orange);background:rgba(245,185,66,.1)}.status.blocked{color:var(--red);background:rgba(255,102,92,.1)}
+.service-card h3,.service-row b{color:#e6ecf4}.fuel-order{color:#a8b3c2;background:#111722}.slot-cards>div{border-color:var(--line)}
+.filters button,.doc-categories button{border-color:#2b3445;color:#7e8a9d;background:#0d121b}.filters button.active,.doc-categories button.active{color:var(--blue);border-color:var(--blue);background:rgba(85,168,255,.1)}
+.material-mark,.doc-icon{color:var(--blue);background:rgba(85,168,255,.12)}.material-copy h3{color:#ecf1f7}.material-copy p{color:#7b8799}.export-material>button{white-space:nowrap}
+.activity-list{border-left-color:#30394b}.activity-list article>div{border-color:var(--line);background:#0d121b}.activity-dot{border-color:#080b11}.activity-list h3{color:#ebf0f6}.activity-list p{color:#748195}.change-box{color:#dfe6ef;background:#221b11}
+.tab-panel+.tab-panel{border-top-color:var(--line)}
+dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--line)}dialog input,dialog select{border-color:#2c3547;color:#e8edf4;background:#111722}.dialog-actions button{border-color:#2b3445;color:#c7d0dc;background:#111722}
+.toast{color:#111807;background:var(--green)}
+@media(max-width:900px){.rightbar{border-top-color:var(--line)}}

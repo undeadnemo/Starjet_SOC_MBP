@@ -61,6 +61,19 @@ const developmentPreviewRoutes: RouteRecordRaw[] = import.meta.env.DEV
           title: '航班计划预览',
         },
       },
+      {
+        name: 'FlightDetailPreview',
+        path: '/preview/flight-detail/:flightId?',
+        component: () =>
+          import('#/views/operations/flight-detail/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航班详情预览',
+        },
+      },
     ]
   : [];
 /** 全局404页面 */

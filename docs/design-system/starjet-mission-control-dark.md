@@ -3,6 +3,7 @@
 Version: 1.0  
 Status: Approved direction for new Starjet OCC/SOC operational screens  
 CSS source of truth: `apps/web-ele/src/styles/starjet-mission-control-dark.css`
+Chinese edition: `docs/design-system/starjet-mission-control-dark.zh-CN.md`
 
 ## 1. Style definition
 
@@ -337,4 +338,3 @@ When proposing or implementing a screen, state:
 - [ ] Keyboard focus and non-color status labels are present.
 - [ ] Layout behaves correctly at 1440, 1280, and 1024 widths.
 - [ ] Loading, empty, error, disabled, hover, and selected states are covered.
-

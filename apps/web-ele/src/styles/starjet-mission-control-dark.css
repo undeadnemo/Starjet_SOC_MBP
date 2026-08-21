@@ -1,6 +1,7 @@
 /*
  * Starjet Mission Control Dark
  * Human guidance: docs/design-system/starjet-mission-control-dark.md
+ * Chinese guidance: docs/design-system/starjet-mission-control-dark.zh-CN.md
  * Opt in by adding data-starjet-theme="mission-control-dark" or the
  * .sj-mission-control class to the operational workspace root.
  */
@@ -95,4 +96,3 @@
     animation-iteration-count: 1 !important;
   }
 }
-

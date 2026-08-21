@@ -12,15 +12,24 @@ import {
 } from 'vue';
 import { useRouter } from 'vue-router';
 
+import {
+  ArrowRightLeft,
+  CircleAlert,
+  Settings,
+  UserRoundPen,
+  X,
+} from '@vben/icons';
 import dayjs from 'dayjs';
 import {
   ElButton,
   ElDatePicker,
   ElDialog,
+  ElDrawer,
   ElForm,
   ElFormItem,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElOption,
   ElSelect,
   ElTable,
@@ -36,6 +45,7 @@ type FlightPhase =
   | 'maintenance'
   | 'preparing';
 type FlightType = 'AOG' | 'FERRY' | 'MX' | 'PAX';
+type TodoStatus = 'blocked' | 'completed' | 'pending';
 type ViewMode = 'calendar' | 'list' | 'timeline';
 
 interface FlightPlanItem {
@@ -54,9 +64,23 @@ interface FlightPlanItem {
   type: FlightType;
 }
 
+interface FlightTodo {
+  content: string;
+  id: string;
+  status: TodoStatus;
+}
+
+interface AirportInfo {
+  city: string;
+  iata: string;
+  name: string;
+  timezone: string;
+}
+
 const viewMode = ref<ViewMode>('timeline');
 const router = useRouter();
 const today = dayjs();
+const now = ref(dayjs());
 const selectedYear = ref(today.year());
 const selectedMonth = ref(today.month() + 1);
 const selectedDay = ref(today.date());
@@ -68,6 +92,59 @@ const timelineHeaderTrackRef = ref<HTMLElement>();
 const timelineViewportWidth = ref(0);
 const requestedTimelineDays = ref(5);
 const addDialogVisible = ref(false);
+const inspectorVisible = ref(false);
+const selectedFlight = ref<FlightPlanItem>();
+let todoSequence = 20;
+
+const airportInfo: Record<string, AirportInfo> = {
+  VHHH: { city: '中国香港', iata: 'HKG', name: '香港国际机场', timezone: 'UTC+08:00' },
+  ZBAA: { city: '北京', iata: 'PEK', name: '北京首都国际机场', timezone: 'UTC+08:00' },
+  ZGGG: { city: '广州', iata: 'CAN', name: '广州白云国际机场', timezone: 'UTC+08:00' },
+  ZGSZ: { city: '深圳', iata: 'SZX', name: '深圳宝安国际机场', timezone: 'UTC+08:00' },
+  ZSPD: { city: '上海', iata: 'PVG', name: '上海浦东国际机场', timezone: 'UTC+08:00' },
+  ZSSS: { city: '上海', iata: 'SHA', name: '上海虹桥国际机场', timezone: 'UTC+08:00' },
+  ZUUU: { city: '成都', iata: 'CTU', name: '成都双流国际机场', timezone: 'UTC+08:00' },
+};
+
+const todoStatusOptions = [
+  { color: 'lime', label: '完成', value: 'completed' },
+  { color: 'amber', label: '待处理', value: 'pending' },
+  { color: 'red', label: '阻碍', value: 'blocked' },
+] as const;
+
+const aircraftToneByRegistration: Record<string, string> = {
+  'B-602M': 'teal',
+  'B-801Q': 'amber',
+  'B-9308': 'blue',
+  'B-9811': 'purple',
+};
+const aircraftToneFallbacks = ['blue', 'teal', 'purple', 'amber', 'lime'] as const;
+const flightTypeIcons = {
+  AOG: CircleAlert,
+  FERRY: ArrowRightLeft,
+  MX: Settings,
+  PAX: UserRoundPen,
+} as const;
+
+const flightTodos = reactive<Record<string, FlightTodo[]>>({
+  'FP-205': [
+    { content: '确认浦东地服保障窗口', id: 'TODO-1', status: 'pending' },
+    { content: '补充航路许可文件', id: 'TODO-2', status: 'blocked' },
+  ],
+  'FP-206': [
+    { content: '协调航材到场时间', id: 'TODO-3', status: 'blocked' },
+    { content: '更新 AOG 恢复预估', id: 'TODO-4', status: 'pending' },
+  ],
+  'FP-210': [
+    { content: '确认广州白云 FBO 停机位', id: 'TODO-5', status: 'completed' },
+    { content: '确认旅客特殊餐食', id: 'TODO-6', status: 'pending' },
+    { content: '等待加油订单回执', id: 'TODO-7', status: 'blocked' },
+  ],
+});
+
+const newTodo = reactive({
+  content: '',
+});
 
 const flights = ref<FlightPlanItem[]>([
   { aircraft: 'B-9308', date: '2026-08-16', flightNo: 'SJX301', from: 'ZSSS', fuel: '加油 WFS 已确认', id: 'FP-201', permit: 'HK PSP/BAC 已确认', phase: 'arrived', sta: '1215', std: '0840', to: 'VHHH', type: 'PAX' },
@@ -120,6 +197,13 @@ const visibleMonthFlights = computed(() => {
   const prefix = `${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}`;
   return filteredFlights.value.filter((flight) => flight.date.startsWith(prefix));
 });
+const operationalMetrics = computed(() => [
+  { label: '计划任务', tone: 'blue', value: visibleMonthFlights.value.length },
+  { label: 'AOG 停场', tone: 'red', value: visibleMonthFlights.value.filter((flight) => flight.type === 'AOG').length },
+  { label: '保障异常', tone: 'amber', value: visibleMonthFlights.value.filter((flight) => flight.fuel.includes('异常') || flight.permit.includes('异常')).length },
+  { label: '排班冲突', tone: 'coral', value: 0 },
+  { label: '按时放行率', tone: 'lime', value: '92%' },
+]);
 const visibleTimelineDays = computed(() => requestedTimelineDays.value);
 const timelineStyle = computed<CSSProperties>(() => {
   const columnWidth = timelineViewportWidth.value / visibleTimelineDays.value;
@@ -130,40 +214,137 @@ const timelineStyle = computed<CSSProperties>(() => {
       : `${(days.value.length * 100) / visibleTimelineDays.value}%`,
   };
 });
-const currentTimeTop = computed(() => ((today.hour() * 60 + today.minute()) / 1440) * 100);
+const currentTimeTop = computed(() => (
+  (now.value.hour() * 60 + now.value.minute() + now.value.second() / 60) / 1440
+) * 100);
+const currentTimeLabel = computed(() => now.value.format('HH:mm'));
+const selectedFlightTodos = computed(() => selectedFlight.value
+  ? (flightTodos[selectedFlight.value.id] ?? [])
+  : []);
+const selectedDepartureAirport = computed(() => selectedFlight.value
+  ? getAirportInfo(selectedFlight.value.from)
+  : undefined);
+const selectedArrivalAirport = computed(() => selectedFlight.value
+  ? getAirportInfo(selectedFlight.value.to)
+  : undefined);
 
 function flightsForDay(date: string) {
   return visibleMonthFlights.value.filter((flight) => flight.date === date);
 }
 
-function flightNoteLines(flight: FlightPlanItem) {
-  const source = flight.notes === undefined
-    ? `PF ${flight.std}Z-${flight.sta}Z 已确认\n${flight.permit}\n${flight.fuel}`
-    : flight.notes;
-  return source
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+function getAirportInfo(code: string): AirportInfo {
+  return airportInfo[code] ?? {
+    city: '待补充',
+    iata: '—',
+    name: '机场资料待补充',
+    timezone: timezone.value.split(' ')[0] ?? 'UTC',
+  };
+}
+
+function getTodoStatus(status: TodoStatus) {
+  return todoStatusOptions.find((item) => item.value === status) ?? todoStatusOptions[1];
+}
+
+function getAircraftStyle(aircraft: string): CSSProperties {
+  const hash = Array.from(aircraft).reduce((total, character) => total + character.codePointAt(0)!, 0);
+  const tone = aircraftToneByRegistration[aircraft]
+    ?? aircraftToneFallbacks[hash % aircraftToneFallbacks.length];
+  return {
+    '--aircraft-color': `var(--sj-${tone})`,
+    '--aircraft-soft': `var(--sj-${tone}-soft)`,
+  };
+}
+
+function todosForFlight(flight: FlightPlanItem) {
+  return flightTodos[flight.id] ?? buildDefaultTodos(flight);
+}
+
+function formatTodoForCard(content: string) {
+  const characters = Array.from(content);
+  return characters.length > 15 ? `${characters.slice(0, 15).join('')}…` : content;
+}
+
+function buildDefaultTodos(flight: FlightPlanItem): FlightTodo[] {
+  return [
+    {
+      content: flight.permit,
+      id: `${flight.id}-PERMIT`,
+      status: flight.permit.includes('已确认') ? 'completed' : 'pending',
+    },
+    {
+      content: flight.fuel,
+      id: `${flight.id}-FUEL`,
+      status: flight.fuel.includes('异常')
+        ? 'blocked'
+        : flight.fuel.includes('已确认')
+          ? 'completed'
+          : 'pending',
+    },
+  ];
+}
+
+function ensureFlightTodos(flight: FlightPlanItem) {
+  if (flightTodos[flight.id]) return;
+  flightTodos[flight.id] = buildDefaultTodos(flight);
+}
+
+function formatFlightTime(time: string) {
+  return `${time.slice(0, 2)}:${time.slice(2)}Z`;
+}
+
+function flightDuration(flight: FlightPlanItem) {
+  const start = Number(flight.std.slice(0, 2)) * 60 + Number(flight.std.slice(2));
+  const end = Number(flight.sta.slice(0, 2)) * 60 + Number(flight.sta.slice(2));
+  const duration = end >= start ? end - start : 1440 - start + end;
+  return `${Math.floor(duration / 60)} 小时 ${String(duration % 60).padStart(2, '0')} 分`;
+}
+
+function flightTimeToMinutes(time: string) {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(2));
+}
+
+function getTurnaroundLabel(flight: FlightPlanItem) {
+  const departureMinute = flightTimeToMinutes(flight.std);
+  const previousFlight = flights.value
+    .filter((item) =>
+      item.id !== flight.id &&
+      item.aircraft === flight.aircraft &&
+      item.date === flight.date &&
+      flightTimeToMinutes(item.std) < departureMinute,
+    )
+    .sort((left, right) => flightTimeToMinutes(right.std) - flightTimeToMinutes(left.std))[0];
+
+  if (!previousFlight) return undefined;
+  const turnaroundMinutes = departureMinute - flightTimeToMinutes(previousFlight.sta);
+  if (turnaroundMinutes < 0 || turnaroundMinutes >= 240) return undefined;
+
+  const hours = Math.floor(turnaroundMinutes / 60);
+  const minutes = turnaroundMinutes % 60;
+  const duration = [hours ? `${hours}小时` : '', minutes ? `${minutes}分` : '']
+    .filter(Boolean)
+    .join('');
+  return `过站 ${duration || '0分'}`;
 }
 
 function getCardStyle(flight: FlightPlanItem, index: number): CSSProperties {
   const startMinute = Number(flight.std.slice(0, 2)) * 60 + Number(flight.std.slice(2));
   const top = Math.max(0.8, Math.min(94, (startMinute / 1440) * 100));
-  const notes = flightNoteLines(flight);
-  const longestNote = Math.max(0, ...notes.map((note) => note.length));
-  const preferredNotesWidth = Math.max(
+  const todos = todosForFlight(flight);
+  const longestTodo = Math.max(0, ...todos.map((todo) => Math.min(Array.from(todo.content).length, 15)));
+  const preferredTodosWidth = Math.max(
     96,
-    Math.min(176, longestNote * 6.5 + Math.min(notes.length, 6) * 6),
+    Math.min(176, longestTodo * 6.5 + Math.min(todos.length, 6) * 6),
   );
   const columnWidth = timelineViewportWidth.value > 0
     ? timelineViewportWidth.value / visibleTimelineDays.value
     : 300;
   const maxCardWidth = Math.max(220, columnWidth - 14);
-  const notesWidth = Math.min(preferredNotesWidth, maxCardWidth * 0.48);
-  const cardWidth = Math.min(maxCardWidth, 180 + notesWidth);
+  const todosWidth = Math.min(preferredTodosWidth, maxCardWidth * 0.48);
+  const cardWidth = Math.min(maxCardWidth, 180 + todosWidth);
   return {
+    ...getAircraftStyle(flight.aircraft),
     '--card-width': `${cardWidth}px`,
-    '--notes-width': `${notesWidth}px`,
+    '--todos-width': `${todosWidth}px`,
     top: `calc(${top}% + ${(index % 2) * 5}px)`,
   };
 }
@@ -185,9 +366,17 @@ async function goToday() {
 }
 
 function openFlight(flight: FlightPlanItem) {
+  ensureFlightTodos(flight);
+  selectedFlight.value = flight;
+  newTodo.content = '';
+  inspectorVisible.value = true;
+}
+
+function goToFlightDetail(flight: FlightPlanItem) {
   const isDemo = router.currentRoute.value.path.startsWith('/demo/');
+  const isPreview = router.currentRoute.value.path.startsWith('/preview/');
   void router.push({
-    name: isDemo ? 'FlightDetailDemo' : 'FlightDetail',
+    name: isDemo ? 'FlightDetailDemo' : isPreview ? 'FlightDetailPreview' : 'FlightDetail',
     params: { flightId: flight.id },
     query: {
       aircraft: flight.aircraft,
@@ -200,6 +389,41 @@ function openFlight(flight: FlightPlanItem) {
       type: flight.type,
     },
   });
+}
+
+function addTodo() {
+  const flight = selectedFlight.value;
+  const content = newTodo.content.trim();
+  if (!flight || !content) {
+    ElMessage.warning('请填写待办内容');
+    return;
+  }
+  ensureFlightTodos(flight);
+  flightTodos[flight.id]?.push({
+    content,
+    id: `TODO-${++todoSequence}`,
+    status: 'pending',
+  });
+  newTodo.content = '';
+  ElMessage.success('待办事项已添加');
+}
+
+async function deleteTodo(todo: FlightTodo) {
+  const flight = selectedFlight.value;
+  if (!flight) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认删除“${todo.content}”？`,
+      '删除待办事项',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+    );
+  } catch {
+    return;
+  }
+  const items = flightTodos[flight.id];
+  const index = items?.findIndex((item) => item.id === todo.id) ?? -1;
+  if (index >= 0) items?.splice(index, 1);
+  ElMessage.success('待办事项已删除');
 }
 
 function saveFlight() {
@@ -267,6 +491,7 @@ watch([selectedYear, selectedMonth, requestedTimelineDays], async () => {
 });
 
 let timelineResizeObserver: ResizeObserver | undefined;
+let currentTimeTimer: ReturnType<typeof setInterval> | undefined;
 
 function updateTimelineViewport(width: number) {
   timelineViewportWidth.value = width;
@@ -296,15 +521,32 @@ watch(viewMode, () => {
 });
 
 onMounted(() => {
+  now.value = dayjs();
+  currentTimeTimer = setInterval(() => {
+    now.value = dayjs();
+  }, 30_000);
   void setupTimelineResizeObserver();
 });
 
-onBeforeUnmount(() => timelineResizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  timelineResizeObserver?.disconnect();
+  if (currentTimeTimer) clearInterval(currentTimeTimer);
+});
 </script>
 
 <template>
-  <div class="flight-plan-page">
+  <div class="flight-plan-page sj-mission-control">
     <section class="plan-toolbar" aria-label="航班计划筛选">
+      <header class="mission-header">
+        <div class="mission-identity">
+          <span class="soc-mark">SOC</span>
+          <span>
+            <strong>运行控制中心</strong>
+            <small>FLEET {{ aircraftOptions.length }} · TASKS {{ visibleMonthFlights.length }} · UTC BASE</small>
+          </span>
+        </div>
+        <div class="mission-status"><i></i>运行监控中</div>
+      </header>
       <div class="toolbar-main">
         <div class="view-switch" aria-label="视图切换">
           <ElButton :class="{ active: viewMode === 'timeline' }" @click="viewMode = 'timeline'">时间线</ElButton>
@@ -359,6 +601,17 @@ onBeforeUnmount(() => timelineResizeObserver?.disconnect());
         </label>
         <p class="task-count">当前显示 <strong>{{ visibleMonthFlights.length }}</strong> 个任务</p>
       </div>
+      <div class="operations-strip" aria-label="运行指标">
+        <div v-for="metric in operationalMetrics" :key="metric.label" class="operation-metric">
+          <i :class="`tone-${metric.tone}`"></i>
+          <strong>{{ metric.value }}</strong>
+          <span>{{ metric.label }}</span>
+        </div>
+        <div class="type-filters" aria-label="航班类型快速筛选">
+          <button :class="{ active: typeFilter === 'all' }" @click="typeFilter = 'all'">全部</button>
+          <button v-for="type in ['PAX', 'FERRY', 'MX', 'AOG']" :key="type" :class="{ active: typeFilter === type }" @click="typeFilter = type">{{ type }}</button>
+        </div>
+      </div>
     </section>
 
     <section v-if="viewMode === 'timeline'" class="timeline-panel">
@@ -408,7 +661,12 @@ onBeforeUnmount(() => timelineResizeObserver?.disconnect());
                 class="hour-line"
                 :style="{ top: `${(hour / 24) * 100}%` }"
               ><i>{{ String(hour).padStart(2, '0') }}:00</i></span>
-              <span v-if="day.isToday" class="current-time-line" :style="{ top: `${currentTimeTop}%` }"><i>当前</i></span>
+              <span
+                v-if="day.isToday"
+                class="current-time-line"
+                :style="{ top: `${currentTimeTop}%` }"
+                :title="`当前时间 ${currentTimeLabel}`"
+              ><i>{{ currentTimeLabel }}</i></span>
               <button
                 v-for="(flight, index) in flightsForDay(day.key)"
                 :key="flight.id"
@@ -416,14 +674,33 @@ onBeforeUnmount(() => timelineResizeObserver?.disconnect());
                 class="flight-card"
                 :class="`phase-${flight.phase}`"
                 :style="getCardStyle(flight, index)"
+                :aria-label="`${flight.type} ${flight.aircraft}，${flight.from} ${formatFlightTime(flight.std)} 至 ${flight.to} ${formatFlightTime(flight.sta)}，${todosForFlight(flight).length} 项待办`"
                 @click="openFlight(flight)"
               >
                 <span class="flight-main">
-                  <span><strong>{{ flight.type }}</strong> <b>{{ flight.aircraft }}</b></span>
-                  <span class="flight-route">{{ flight.from }} {{ flight.std }}Z - {{ flight.sta }}Z {{ flight.to }}</span>
+                  <span class="flight-card-head">
+                    <span>
+                      <strong class="flight-type-tag"><component :is="flightTypeIcons[flight.type]" aria-hidden="true" />{{ flight.type }}</strong>
+                      <b class="aircraft-color-label">{{ flight.aircraft }}</b>
+                    </span>
+                  </span>
+                  <small v-if="getTurnaroundLabel(flight)" class="flight-turnaround" title="可用过站时间">{{ getTurnaroundLabel(flight) }}</small>
+                  <span class="flight-route">
+                    <span><b class="airport-code">{{ flight.from }}</b><time>{{ formatFlightTime(flight.std) }}</time></span>
+                    <em>→</em>
+                    <span><b class="airport-code">{{ flight.to }}</b><time>{{ formatFlightTime(flight.sta) }}</time></span>
+                  </span>
                 </span>
-                <span class="flight-notes">
-                  <i v-for="(note, noteIndex) in flightNoteLines(flight)" :key="`${flight.id}-${noteIndex}`">{{ note }}</i>
+                <span class="flight-card-todos" aria-label="待办事项">
+                  <span v-for="todo in todosForFlight(flight)" :key="todo.id">
+                    <i :title="todo.content">{{ formatTodoForCard(todo.content) }}</i>
+                    <b
+                      class="todo-status-light"
+                      :class="`status-${getTodoStatus(todo.status).color}`"
+                      :title="getTodoStatus(todo.status).label"
+                      :aria-label="getTodoStatus(todo.status).label"
+                    ></b>
+                  </span>
                 </span>
               </button>
             </section>
@@ -436,8 +713,10 @@ onBeforeUnmount(() => timelineResizeObserver?.disconnect());
       <div class="calendar-grid">
         <article v-for="day in days" :key="day.key" class="calendar-day">
           <header><strong>{{ day.label }}</strong><span>{{ day.weekday }}</span></header>
-          <button v-for="flight in flightsForDay(day.key)" :key="flight.id" class="calendar-flight" @click="openFlight(flight)">
-            {{ flight.std }} {{ flight.aircraft }} · {{ flight.from }} → {{ flight.to }}
+          <button v-for="flight in flightsForDay(day.key)" :key="flight.id" class="calendar-flight" :style="getAircraftStyle(flight.aircraft)" @click="openFlight(flight)">
+            <span class="flight-type-tag"><component :is="flightTypeIcons[flight.type]" aria-hidden="true" />{{ flight.type }}</span>
+            <span class="aircraft-color-label">{{ flight.aircraft }}</span>
+            <span>{{ flight.std }}Z · {{ flight.from }} → {{ flight.to }}</span>
           </button>
         </article>
       </div>
@@ -446,13 +725,104 @@ onBeforeUnmount(() => timelineResizeObserver?.disconnect());
     <section v-else class="alternative-panel list-panel">
       <ElTable :data="visibleMonthFlights" stripe>
         <ElTableColumn prop="date" label="日期" width="120" />
-        <ElTableColumn prop="aircraft" label="注册号" width="110" />
-        <ElTableColumn prop="type" label="类型" width="100" />
+        <ElTableColumn label="注册号" width="110"><template #default="{ row }"><span class="aircraft-color-label" :style="getAircraftStyle(row.aircraft)">{{ row.aircraft }}</span></template></ElTableColumn>
+        <ElTableColumn label="类型" width="100"><template #default="{ row }"><span class="flight-type-tag"><component :is="flightTypeIcons[row.type as FlightType]" aria-hidden="true" />{{ row.type }}</span></template></ElTableColumn>
         <ElTableColumn label="航段"><template #default="{ row }">{{ row.from }} {{ row.std }}Z - {{ row.sta }}Z {{ row.to }}</template></ElTableColumn>
-        <ElTableColumn label="备注"><template #default="{ row }">{{ flightNoteLines(row).join(' / ') }}</template></ElTableColumn>
+        <ElTableColumn label="待办事项"><template #default="{ row }">{{ todosForFlight(row).map((todo) => todo.content).join(' / ') }}</template></ElTableColumn>
         <ElTableColumn label="操作" width="90"><template #default="{ row }"><ElButton link type="primary" @click="openFlight(row)">查看</ElButton></template></ElTableColumn>
       </ElTable>
     </section>
+
+    <ElDrawer
+      v-model="inspectorVisible"
+      append-to-body
+      class="flight-inspector-drawer"
+      direction="rtl"
+      size="min(440px, 94vw)"
+      :with-header="false"
+    >
+      <div v-if="selectedFlight" class="flight-inspector-content">
+        <header class="inspector-header">
+          <div>
+            <small>FLIGHT INSPECTOR</small>
+            <h2>航班简介</h2>
+          </div>
+          <button type="button" aria-label="关闭航班简介" @click="inspectorVisible = false">×</button>
+        </header>
+
+        <section class="inspector-flight-summary" aria-label="航班概要" :style="getAircraftStyle(selectedFlight.aircraft)">
+          <div class="summary-meta">
+            <span class="flight-type-tag"><component :is="flightTypeIcons[selectedFlight.type]" aria-hidden="true" />{{ selectedFlight.type }}</span>
+            <strong class="aircraft-color-label">{{ selectedFlight.aircraft }}</strong>
+            <i>{{ selectedFlight.flightNo }}</i>
+          </div>
+          <div class="summary-route">
+            <div>
+              <strong>{{ selectedFlight.from }}</strong>
+              <p>{{ selectedDepartureAirport?.name }}</p>
+              <small>{{ selectedDepartureAirport?.timezone }}</small>
+              <time>{{ formatFlightTime(selectedFlight.std) }}</time>
+            </div>
+            <span><i></i><b>→</b><i></i></span>
+            <div>
+              <strong>{{ selectedFlight.to }}</strong>
+              <p>{{ selectedArrivalAirport?.name }}</p>
+              <small>{{ selectedArrivalAirport?.timezone }}</small>
+              <time>{{ formatFlightTime(selectedFlight.sta) }}</time>
+            </div>
+          </div>
+          <div class="summary-facts">
+            <span><small>日期</small>{{ selectedFlight.date }}</span>
+            <span><small>计划时长</small>{{ flightDuration(selectedFlight) }}</span>
+          </div>
+        </section>
+
+        <section class="todo-section" aria-labelledby="todo-section-title">
+          <header>
+            <div><h3 id="todo-section-title">待办事项</h3><small>{{ selectedFlightTodos.length }} ITEMS</small></div>
+            <div class="todo-legend">
+              <span v-for="status in todoStatusOptions" :key="status.value" :class="`status-${status.color}`">
+                <i class="todo-status-light"></i>{{ status.label }}
+              </span>
+            </div>
+          </header>
+          <div class="todo-list">
+            <article v-for="todo in selectedFlightTodos" :key="todo.id" class="todo-item">
+              <ElInput v-model="todo.content" aria-label="待办内容" class="todo-content-input" />
+              <div class="todo-status-lights" role="radiogroup" :aria-label="`待办状态：${getTodoStatus(todo.status).label}`">
+                <button
+                  v-for="status in todoStatusOptions"
+                  :key="status.value"
+                  class="todo-status-choice"
+                  :class="[`status-${status.color}`, { 'is-active': todo.status === status.value }]"
+                  type="button"
+                  role="radio"
+                  :aria-checked="todo.status === status.value"
+                  :aria-label="`设为${status.label}`"
+                  :title="status.label"
+                  @click="todo.status = status.value"
+                >
+                  <i class="todo-status-light" aria-hidden="true"></i>
+                </button>
+              </div>
+              <button class="todo-delete-button" type="button" :aria-label="`删除待办：${todo.content}`" @click="deleteTodo(todo)">
+                <X />
+              </button>
+            </article>
+            <p v-if="!selectedFlightTodos.length" class="todo-empty">暂无待办事项</p>
+          </div>
+
+          <div class="todo-composer">
+            <ElInput v-model="newTodo.content" type="textarea" :rows="2" resize="none" placeholder="填写新的待办事项，可输入具体责任或下一步动作" />
+            <ElButton class="todo-secondary-action" @click="addTodo">添加待办</ElButton>
+          </div>
+        </section>
+
+        <footer class="inspector-footer">
+          <ElButton @click="goToFlightDetail(selectedFlight)">进入完整详情页</ElButton>
+        </footer>
+      </div>
+    </ElDrawer>
 
     <ElDialog v-model="addDialogVisible" title="添加航班" width="560px">
       <ElForm label-width="90px">
@@ -523,24 +893,66 @@ onBeforeUnmount(() => timelineResizeObserver?.disconnect());
 .hour-line i { position: absolute; top: 4px; left: 7px; font-style: normal; }
 .current-time-line { position: absolute; z-index: 3; left: 0; width: 100%; border-top: 1px dashed #f05252; }
 .current-time-line i { position: absolute; top: -9px; right: 6px; padding-left: 6px; color: #ef4444; font-size: 10px; font-style: normal; background: #fff; }
-.flight-card { position: absolute; z-index: 4; left: 7px; display: grid; grid-template-columns: minmax(0,1fr) minmax(88px,var(--notes-width,120px)); gap: 6px; width: min(calc(100% - 14px),var(--card-width,calc(100% - 14px))); max-width: calc(100% - 14px); min-height: 58px; padding: 8px; overflow: hidden; border: 1px solid #cbd8e6; border-radius: 5px; color: #202833; text-align: left; box-shadow: 0 5px 12px rgba(31,55,79,.07); transition: 160ms ease; }
+.flight-card { position: absolute; z-index: 4; left: 7px; display: grid; grid-template-columns: minmax(0,1fr) minmax(88px,var(--todos-width,120px)); gap: 6px; width: min(calc(100% - 14px),var(--card-width,calc(100% - 14px))); max-width: calc(100% - 14px); min-height: 58px; padding: 8px; overflow: hidden; border: 1px solid #cbd8e6; border-radius: 5px; color: #202833; text-align: left; box-shadow: 0 5px 12px rgba(31,55,79,.07); transition: 160ms ease; }
 .flight-card:hover, .flight-card:focus-visible { z-index: 8; outline: 2px solid rgba(63,124,255,.36); transform: translateY(-2px); box-shadow: 0 11px 24px rgba(31,55,79,.15); }
 .phase-arrived { border-color: #c9d8e8; background: #eef3f8; }
 .phase-confirmed { border-color: #c4d6ef; background: #edf5ff; }
 .phase-preparing { border-color: #f0d497; background: #fff7e4; }
 .phase-maintenance { border-color: #dfc4db; background: #f8ecf6; }
 .phase-aog { border-color: #f0c2c2; background: #fff0f0; }
-.flight-main, .flight-notes { display: grid; min-width: 0; gap: 4px; }
-.flight-main > span:first-child { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.flight-main strong, .flight-main b { font-size: 12px; }
-.phase-aog .flight-main b, .phase-maintenance .flight-main b { color: #9b3434; }
-.flight-route { overflow: visible; font-size: 11px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
-.flight-notes { align-content: center; text-align: right; }
-.flight-notes i { overflow: visible; color: #202833; font-size: 10px; font-style: normal; line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+.flight-main, .flight-card-todos { display: grid; min-width: 0; gap: 4px; }
+.flight-card-head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--sj-space-2); }
+.flight-card-head > span:first-child { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.flight-type-tag {
+  display: inline-flex;
+  min-height: 19px;
+  padding-inline: var(--sj-space-1);
+  align-items: center;
+  gap: var(--sj-space-1);
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-tag);
+  color: var(--sj-text-2);
+  background: var(--sj-surface-3);
+  font: 700 9px var(--sj-font-data);
+  letter-spacing: .08em;
+}
+.flight-type-tag svg { width: 11px; height: 11px; flex: 0 0 11px; stroke-width: 2; }
+.aircraft-color-label { color: var(--aircraft-color, var(--sj-text-1)); font-family: var(--sj-font-data); font-weight: 700; }
+.flight-main .aircraft-color-label { font-size: 12px; }
+.flight-turnaround {
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  padding-inline: var(--sj-space-1);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--sj-amber) 48%, transparent);
+  border-radius: var(--sj-radius-tag);
+  color: var(--sj-amber);
+  background: var(--sj-amber-soft);
+  font: 700 8px var(--sj-font-data);
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flight-route { display: flex; min-width: 0; align-items: center; gap: var(--sj-space-1); overflow: visible; font-size: 11px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
+.flight-route > span { display: grid; min-width: 0; gap: 1px; }
+.flight-route > span:last-child { text-align: right; }
+.flight-route em { color: var(--sj-text-3); font-style: normal; }
+.flight-route .airport-code { font-size: 14px; line-height: 1; }
+.flight-route time { color: var(--sj-text-2); font-size: 11px; font-weight: 650; white-space: nowrap; }
+.todo-status-light { display: inline-block; width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: currentColor; }
+.status-lime { color: var(--sj-lime); }
+.status-blue { color: var(--sj-blue); }
+.status-amber { color: var(--sj-amber); }
+.status-red { color: var(--sj-red); }
+.flight-card-todos { align-self: start; align-content: start; text-align: right; }
+.flight-card-todos > span { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 14px; align-items: center; gap: var(--sj-space-1); }
+.flight-card-todos i { max-width: 15em; overflow: hidden; color: #202833; font-size: 10px; font-style: normal; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 1px; overflow: hidden; border: 1px solid #e1e6eb; border-radius: 12px; background: #e1e6eb; }
 .calendar-day { min-height: 138px; padding: 10px; background: #fff; }
 .calendar-day header { display: flex; justify-content: space-between; margin-bottom: 10px; color: #5b6677; }
-.calendar-flight { display: block; width: 100%; margin-top: 6px; padding: 6px 8px; overflow: hidden; border: 0; border-radius: 5px; color: #24435d; font-size: 12px; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: #edf5ff; }
+.calendar-flight { display: flex; width: 100%; margin-top: 6px; padding: 6px 8px; overflow: hidden; align-items: center; gap: var(--sj-space-2); border: 0; border-radius: 5px; color: #24435d; font-size: 12px; text-align: left; white-space: nowrap; background: #edf5ff; }
+.calendar-flight > span:last-child { min-width: 0; overflow: hidden; flex: 1; text-overflow: ellipsis; }
 .list-panel {
   overflow: hidden;
   background: #fff;
@@ -587,5 +999,405 @@ onBeforeUnmount(() => timelineResizeObserver?.disconnect());
 .edit-flight-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
 .edit-flight-form :deep(.el-form-item__label) { color: #cfd5df; font-weight: 600; }
 @media (max-width: 1180px) { .toolbar-spacer { display: none; } .timezone-field { margin-left: 0; } .task-count { width: 100%; margin-left: 0; } }
-@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-notes { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+/* Mission Control Dark: opt-in operational workspace skin. */
+.flight-plan-page.sj-mission-control {
+  --mc-canvas: #07090e;
+  --mc-surface: #0b0e15;
+  --mc-raised: #111722;
+  --mc-grid: #171d29;
+  --mc-line: #252d3d;
+  --mc-text: #f1f5f9;
+  --mc-muted: #778398;
+  --mc-blue: #55a8ff;
+  --mc-lime: #a3e635;
+  --mc-amber: #f5b942;
+  --mc-red: #ff665c;
+  min-height: 100%;
+  padding: 0;
+  color: var(--mc-text);
+  background: var(--mc-canvas);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+}
+
+.sj-mission-control .plan-toolbar,
+.sj-mission-control .timeline-panel,
+.sj-mission-control .alternative-panel {
+  border: 0;
+  border-radius: 0;
+  background: var(--mc-canvas);
+  box-shadow: none;
+}
+
+.sj-mission-control .plan-toolbar { gap: 0; padding: 0; border-bottom: 1px solid var(--mc-line); }
+.mission-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 20px; border-bottom: 1px solid var(--mc-line); background: #080b11; }
+.mission-identity { display: flex; align-items: center; gap: 11px; }
+.mission-identity > span:last-child { display: grid; gap: 2px; }
+.mission-identity strong { color: #f8fafc; font-size: 14px; font-weight: 720; }
+.mission-identity small { color: #657086; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .14em; }
+.soc-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 8px; color: #111807; background: var(--mc-lime); box-shadow: 0 0 24px rgba(163,230,53,.16); font-size: 11px; font-weight: 900; letter-spacing: .04em; }
+.mission-status { display: flex; align-items: center; gap: 7px; color: #8a96a9; font-size: 10px; letter-spacing: .12em; }
+.mission-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--mc-lime); box-shadow: 0 0 12px rgba(163,230,53,.72); }
+
+.sj-mission-control .toolbar-main { min-height: 58px; padding: 10px 20px; align-items: center; border-bottom: 1px solid var(--mc-line); background: var(--mc-surface); }
+.sj-mission-control .toolbar-filters { min-height: 56px; padding: 9px 20px; align-items: center; border-bottom: 1px solid var(--mc-line); background: #090c12; }
+.sj-mission-control .view-switch { height: 36px; border-color: #283247; border-radius: 7px; background: #111722; }
+.sj-mission-control .view-switch :deep(.el-button) { min-height: 30px; color: #7d899d; font-size: 12px; }
+.sj-mission-control .view-switch :deep(.el-button.active) { color: #fff; background: #26344a; box-shadow: inset 0 0 0 1px rgba(85,168,255,.38), 0 0 16px rgba(85,168,255,.08); }
+.sj-mission-control .year-select { width: 108px; }
+.sj-mission-control .month-select,
+.sj-mission-control .day-select { width: 84px; }
+.sj-mission-control .date-selectors :deep(.el-select__wrapper),
+.sj-mission-control .timezone-field :deep(.el-select__wrapper),
+.sj-mission-control .toolbar-filters :deep(.el-select__wrapper) {
+  min-height: 36px;
+  border-radius: 6px;
+  background: #111722;
+  box-shadow: 0 0 0 1px #2a3345 inset;
+}
+.sj-mission-control .date-selectors :deep(.el-select__selected-item),
+.sj-mission-control .timezone-field :deep(.el-select__selected-item),
+.sj-mission-control .toolbar-filters :deep(.el-select__selected-item) { color: #e7edf7; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+.sj-mission-control .date-selectors :deep(.el-select__caret),
+.sj-mission-control .timezone-field :deep(.el-select__caret),
+.sj-mission-control .toolbar-filters :deep(.el-select__caret) { color: #778398; }
+.sj-mission-control .today-button { min-height: 36px; border-color: color-mix(in srgb, var(--sj-lime) 42%, transparent); color: var(--sj-lime); background: var(--sj-lime-soft); }
+.sj-mission-control .today-button:hover,
+.sj-mission-control .today-button:focus-visible { border-color: var(--sj-lime); color: var(--sj-canvas); background: var(--sj-lime); }
+.sj-mission-control .timezone-field > span,
+.sj-mission-control .toolbar-filters label > span { padding-left: 1px; color: #657086; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.sj-mission-control .timezone-field { width: 240px; }
+.sj-mission-control .toolbar-filters label { width: 165px; }
+.sj-mission-control .add-button { min-height: 36px; border-color: var(--mc-lime); color: #101607; background: var(--mc-lime); box-shadow: 0 0 20px rgba(163,230,53,.12); font-weight: 750; }
+.sj-mission-control .add-button:hover,
+.sj-mission-control .add-button:focus-visible { border-color: #b8f35c; color: #071006; background: #b8f35c; }
+.sj-mission-control .task-count { color: #68758a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; }
+.sj-mission-control .task-count strong { color: #e8eef8; }
+
+.operations-strip { display: flex; min-height: 62px; padding: 0 20px; align-items: stretch; background: #070a10; }
+.operation-metric { display: grid; min-width: 146px; padding: 11px 22px 10px 0; margin-right: 22px; grid-template-columns: 9px auto; grid-template-rows: auto auto; column-gap: 9px; align-content: center; border-right: 1px solid #1c2330; }
+.operation-metric > i { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: #657086; }
+.operation-metric > strong { color: #f8fafc; font-family: "SFMono-Regular", Consolas, monospace; font-size: 18px; line-height: 1; }
+.operation-metric > span { grid-column: 2; margin-top: 5px; color: #657086; font-size: 9px; letter-spacing: .04em; }
+.operation-metric > i.tone-blue { background: var(--mc-blue); box-shadow: 0 0 9px rgba(85,168,255,.65); }
+.operation-metric > i.tone-red,
+.operation-metric > i.tone-coral { background: var(--mc-red); box-shadow: 0 0 9px rgba(255,102,92,.56); }
+.operation-metric > i.tone-amber { background: var(--mc-amber); box-shadow: 0 0 9px rgba(245,185,66,.55); }
+.operation-metric > i.tone-lime { background: var(--mc-lime); box-shadow: 0 0 9px rgba(163,230,53,.62); }
+.type-filters { display: flex; align-items: center; gap: 7px; margin-left: auto; }
+.type-filters button { min-width: 46px; height: 29px; border: 1px solid #252d3c; border-radius: 5px; color: #758197; background: #0c1018; font: 10px "SFMono-Regular", Consolas, monospace; cursor: pointer; }
+.type-filters button:hover,
+.type-filters button.active { border-color: #56647b; color: #f4f7fb; background: #161c27; }
+
+.sj-mission-control .timeline-panel,
+.sj-mission-control .alternative-panel { margin-top: 0; padding: 0; }
+.sj-mission-control .timeline-sticky-header { padding: 0; background: #0a0d14; }
+.sj-mission-control .timeline-header-viewport { border: 0; border-radius: 0; background: #0a0d14; }
+.sj-mission-control .timeline-header { height: 64px; border-bottom-color: var(--mc-line); background: #0a0d14; }
+.sj-mission-control .day-head { border-right: 1px solid var(--mc-line); color: #edf2f8; }
+.sj-mission-control .day-head span { color: #8090a6; font-size: 9px; }
+.sj-mission-control .day-head strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; letter-spacing: -.02em; }
+.sj-mission-control .day-head small { color: #647087; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .08em; }
+.sj-mission-control .day-head.today { border: 0; border-right: 1px solid #2b4630; border-radius: 0; background: #152118; box-shadow: inset 0 -2px var(--mc-lime); }
+.sj-mission-control .day-head.today span { color: var(--mc-lime); }
+.sj-mission-control .timeline-scroll { border: 0; border-radius: 0; background: var(--mc-canvas); scrollbar-color: #38445b #0a0d14; }
+.sj-mission-control .timeline-body { height: clamp(500px, calc(100dvh - 305px), 680px); }
+.sj-mission-control .day-column,
+.sj-mission-control .day-column:nth-child(even) { border-right-color: var(--mc-line); background-color: var(--mc-canvas); background-image: linear-gradient(90deg, rgba(31,39,53,.2) 1px, transparent 1px); background-size: 25% 100%; }
+.sj-mission-control .day-column:nth-child(even) { background-color: #090b11; }
+.sj-mission-control .day-column.today { border-inline: 1px solid rgba(163,230,53,.42); background-color: #0a0e0b; box-shadow: inset 0 0 35px rgba(163,230,53,.025); }
+.sj-mission-control .hour-line { border-top-color: #1b2230; color: #4f5c72; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.sj-mission-control .current-time-line { border-top: 1px solid var(--mc-red); box-shadow: 0 0 8px rgba(255,102,92,.25); }
+.sj-mission-control .current-time-line i { color: #140807; background: var(--mc-red); border-radius: 3px; padding: 2px 5px; font-family: "SFMono-Regular", Consolas, monospace; }
+.sj-mission-control .flight-card { min-height: 72px; border-color: color-mix(in srgb, var(--aircraft-color) 58%, var(--sj-border)); border-left-width: 3px; border-radius: 7px; color: var(--sj-text-1); background: color-mix(in srgb, var(--aircraft-color) 22%, var(--sj-surface-2)); box-shadow: 0 0 0 1px var(--aircraft-soft) inset, 0 0 16px var(--aircraft-soft); }
+.sj-mission-control .flight-card:hover,
+.sj-mission-control .flight-card:focus-visible { outline-color: rgba(85,168,255,.35); box-shadow: 0 0 0 1px rgba(85,168,255,.35) inset, 0 0 24px rgba(58,135,217,.28); }
+.sj-mission-control .phase-arrived,
+.sj-mission-control .phase-confirmed,
+.sj-mission-control .phase-preparing,
+.sj-mission-control .phase-maintenance,
+.sj-mission-control .phase-aog { border-color: color-mix(in srgb, var(--aircraft-color) 58%, var(--sj-border)); background: color-mix(in srgb, var(--aircraft-color) 22%, var(--sj-surface-2)); box-shadow: 0 0 16px var(--aircraft-soft); }
+.sj-mission-control .flight-main .aircraft-color-label { color: var(--aircraft-color); font-family: var(--sj-font-data); font-size: 12px; letter-spacing: .04em; }
+.sj-mission-control .flight-route { color: var(--sj-text-1); font-family: var(--sj-font-data); }
+.sj-mission-control .flight-route .airport-code { color: var(--sj-text-1); font-size: 15px; letter-spacing: .03em; }
+.sj-mission-control .flight-route time { color: var(--sj-text-2); font-size: 11px; }
+.sj-mission-control .flight-card-todos i { color: var(--sj-text-2); font-family: var(--sj-font-ui); font-size: 9px; line-height: 1.45; }
+
+.sj-mission-control .calendar-grid { gap: 1px; border-color: var(--mc-line); border-radius: 0; background: var(--mc-line); }
+.sj-mission-control .calendar-day { background: #090c12; }
+.sj-mission-control .calendar-day:nth-child(even) { background: #0b0f16; }
+.sj-mission-control .calendar-day header { color: #8b98ab; }
+.sj-mission-control .calendar-flight { border: 1px solid color-mix(in srgb, var(--aircraft-color) 48%, var(--sj-border)); color: var(--sj-text-1); background: color-mix(in srgb, var(--aircraft-color) 18%, var(--sj-surface-2)); }
+.sj-mission-control .list-panel { background: var(--mc-canvas); }
+.sj-mission-control .list-panel :deep(.el-table) {
+  --el-table-bg-color: #080b11;
+  --el-table-tr-bg-color: #080b11;
+  --el-table-header-bg-color: #0e131d;
+  --el-table-row-hover-bg-color: #111b2a;
+  --el-table-current-row-bg-color: #111b2a;
+  --el-table-text-color: #c6cfdd;
+  --el-table-header-text-color: #69768a;
+  --el-table-border-color: #1f2633;
+  --el-fill-color-lighter: #0a0e15;
+  color: #c6cfdd;
+  background: #080b11;
+}
+.sj-mission-control .list-panel :deep(.el-table th.el-table__cell) { height: 42px; color: #7c889b; background: #0e131d; font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; letter-spacing: .08em; }
+.sj-mission-control .list-panel :deep(.el-table td.el-table__cell) { height: 48px; color: #c8d2e0; border-bottom-color: #1c2330; background: #080b11; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
+.sj-mission-control .list-panel :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) { background: #0a0e15; }
+.sj-mission-control .list-panel :deep(.el-table__body tr:hover > td.el-table__cell) { background: #111b2a; }
+.sj-mission-control .list-panel :deep(.el-table__inner-wrapper::before) { background: #1f2633; }
+.sj-mission-control .list-panel :deep(.el-button.is-link) { color: var(--mc-blue); }
+
+@media (max-width: 1180px) {
+  .operations-strip { overflow-x: auto; }
+  .operation-metric { min-width: 132px; }
+  .type-filters { padding-left: 8px; }
+}
+
+@media (max-width: 760px) {
+  .flight-plan-page.sj-mission-control { padding: 0; }
+  .mission-header { padding-inline: 12px; }
+  .mission-status { display: none; }
+  .sj-mission-control .toolbar-main,
+  .sj-mission-control .toolbar-filters { padding: 10px 12px; }
+  .sj-mission-control .plan-toolbar,
+  .sj-mission-control .timeline-panel,
+  .sj-mission-control .alternative-panel { padding: 0; border-radius: 0; }
+  .operations-strip { padding-inline: 12px; }
+  .operation-metric { min-width: 124px; }
+  .sj-mission-control .flight-card-todos { display: grid; }
+  .sj-mission-control .timeline-body { height: 610px; }
+}
+</style>
+
+<style>
+.el-drawer.flight-inspector-drawer {
+  --el-drawer-bg-color: var(--sj-surface-1);
+  border-left: 1px solid var(--sj-border);
+  color: var(--sj-text-1);
+  background: var(--sj-surface-1);
+  box-shadow: var(--sj-shadow-panel);
+}
+
+.flight-inspector-drawer .el-drawer__body {
+  padding: 0;
+  overflow-x: hidden;
+}
+
+.flight-inspector-content {
+  display: flex;
+  height: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  color: var(--sj-text-1);
+  background: var(--sj-canvas);
+  font-family: var(--sj-font-ui);
+}
+
+.inspector-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  min-height: 68px;
+  padding: var(--sj-space-3) var(--sj-space-4);
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--sj-border);
+  background: var(--sj-surface-1);
+}
+
+.inspector-header > div { display: grid; gap: var(--sj-space-1); }
+.inspector-header small,
+.todo-section header small {
+  color: var(--sj-text-3);
+  font: 9px var(--sj-font-data);
+  letter-spacing: .14em;
+}
+.inspector-header h2,
+.todo-section h3 { margin: 0; color: var(--sj-text-1); }
+.inspector-header h2 { font-size: 18px; }
+.inspector-header button {
+  display: grid;
+  width: var(--sj-control-dense);
+  height: var(--sj-control-dense);
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--sj-border);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-text-2);
+  background: var(--sj-surface-2);
+  font-size: 22px;
+  cursor: pointer;
+}
+.inspector-header button:hover { border-color: var(--sj-border-strong); color: var(--sj-text-1); }
+
+.inspector-flight-summary,
+.todo-section { border-bottom: 1px solid var(--sj-border); }
+.inspector-flight-summary { padding: var(--sj-space-4); background: var(--sj-surface-1); }
+.summary-meta { display: flex; align-items: center; gap: var(--sj-space-2); }
+.summary-meta .flight-type-tag {
+  padding: var(--sj-space-1) var(--sj-space-2);
+  border-radius: var(--sj-radius-tag);
+  color: var(--sj-text-2);
+  background: var(--sj-surface-3);
+  font: 10px var(--sj-font-data);
+  letter-spacing: .08em;
+}
+.summary-meta .aircraft-color-label { color: var(--aircraft-color); font: 14px var(--sj-font-data); }
+.summary-meta i { margin-left: auto; color: var(--sj-text-3); font: 10px var(--sj-font-data); font-style: normal; }
+.summary-route { display: grid; margin-top: var(--sj-space-5); grid-template-columns: 1fr minmax(58px, .65fr) 1fr; align-items: center; }
+.summary-route > div { display: grid; gap: var(--sj-space-1); }
+.summary-route > div:last-child { text-align: right; }
+.summary-route strong { color: var(--sj-text-1); font: 28px var(--sj-font-data); letter-spacing: -.04em; }
+.summary-route p { min-height: 34px; margin: 0; color: var(--sj-text-2); font-size: 12px; line-height: 1.4; }
+.summary-route small { color: var(--sj-text-3); font: 9px var(--sj-font-data); }
+.summary-route time { color: var(--sj-blue); font-size: 13px; }
+.summary-route > span { display: flex; align-items: center; color: var(--sj-text-3); }
+.summary-route > span i { height: 1px; flex: 1; background: var(--sj-border-strong); }
+.summary-route > span b { padding-inline: var(--sj-space-1); font-weight: 500; }
+.summary-facts { display: grid; margin-top: var(--sj-space-5); grid-template-columns: 1fr 1fr; gap: var(--sj-space-3); }
+.summary-facts span { display: grid; gap: var(--sj-space-1); color: var(--sj-text-2); font: 11px var(--sj-font-data); }
+.summary-facts small { color: var(--sj-text-3); font: 9px var(--sj-font-ui); }
+
+.todo-section { padding: var(--sj-space-4); }
+.todo-section > header { display: flex; align-items: center; justify-content: space-between; }
+.todo-section h3 { font-size: 14px; }
+
+.todo-section > header > div:first-child { display: flex; align-items: baseline; gap: var(--sj-space-2); }
+.todo-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sj-space-2); }
+.todo-legend span { display: flex; align-items: center; gap: var(--sj-space-1); font-size: 9px; }
+.todo-legend .todo-status-light { width: 8px; height: 8px; flex-basis: 8px; }
+.todo-list { display: grid; margin-top: var(--sj-space-3); gap: var(--sj-space-2); }
+.todo-item {
+  display: grid;
+  min-width: 0;
+  min-height: 52px;
+  padding: var(--sj-space-2);
+  grid-template-columns: minmax(0, 1fr) auto var(--sj-control-dense);
+  align-items: center;
+  gap: var(--sj-space-2);
+  border: 1px solid var(--sj-border);
+  border-radius: var(--sj-radius-control);
+  background: var(--sj-surface-2);
+}
+.todo-content-input .el-input__wrapper {
+  min-height: var(--sj-control-dense);
+  padding-inline: var(--sj-space-2);
+  border-radius: var(--sj-radius-control);
+  background: var(--sj-surface-1);
+  box-shadow: 0 0 0 1px var(--sj-border) inset;
+}
+.todo-content-input .el-input__inner { color: var(--sj-text-1); font-size: 12px; }
+.todo-content-input .el-input__wrapper:hover,
+.todo-content-input .el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--sj-blue) inset; }
+.todo-status-lights {
+  display: inline-grid;
+  grid-template-columns: repeat(3, var(--sj-control-default));
+  overflow: hidden;
+  border: 1px solid var(--sj-border);
+  border-radius: var(--sj-radius-control);
+  background: var(--sj-surface-1);
+}
+.todo-status-choice {
+  display: grid;
+  width: var(--sj-control-default);
+  height: var(--sj-control-default);
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-right: 1px solid var(--sj-border);
+  color: var(--sj-text-disabled);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--sj-duration-fast), background var(--sj-duration-fast);
+}
+.todo-status-choice:last-child { border-right: 0; }
+.todo-status-choice .todo-status-light { opacity: .32; }
+.todo-status-choice:hover .todo-status-light { opacity: .72; }
+.todo-status-choice.is-active .todo-status-light {
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+}
+.todo-status-choice.is-active.status-lime { color: var(--sj-lime); background: var(--sj-lime-soft); }
+.todo-status-choice.is-active.status-amber { color: var(--sj-amber); background: var(--sj-amber-soft); }
+.todo-status-choice.is-active.status-red { color: var(--sj-red); background: var(--sj-red-soft); }
+.todo-status-choice:focus-visible { position: relative; z-index: 1; }
+.todo-delete-button {
+  display: grid;
+  width: var(--sj-control-dense);
+  height: var(--sj-control-dense);
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--sj-border);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-text-3);
+  background: var(--sj-surface-1);
+  cursor: pointer;
+}
+.todo-delete-button svg { width: 14px; height: 14px; }
+.todo-delete-button:hover,
+.todo-delete-button:focus-visible { border-color: var(--sj-red); color: var(--sj-red); background: var(--sj-red-soft); }
+.todo-empty { margin: 0; padding: var(--sj-space-4); color: var(--sj-text-3); text-align: center; }
+.todo-composer {
+  display: grid;
+  margin-top: var(--sj-space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: var(--sj-space-2);
+}
+.todo-composer .el-textarea__inner {
+  color: var(--sj-text-1);
+  border-radius: var(--sj-radius-control);
+  background: var(--sj-surface-2);
+  box-shadow: 0 0 0 1px var(--sj-border) inset;
+}
+.todo-composer .el-textarea__inner::placeholder { color: var(--sj-text-3); }
+.todo-secondary-action.el-button {
+  min-height: 100%;
+  padding-inline: var(--sj-space-3);
+  border-color: color-mix(in srgb, var(--sj-lime) 42%, transparent);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-lime);
+  background: var(--sj-lime-soft);
+  font-weight: 600;
+}
+.todo-secondary-action.el-button:hover,
+.todo-secondary-action.el-button:focus-visible { border-color: var(--sj-lime); color: var(--sj-canvas); background: var(--sj-lime); }
+.inspector-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin-top: auto;
+  padding: var(--sj-space-4);
+  border-top: 1px solid var(--sj-border);
+  background: var(--sj-surface-1);
+}
+.inspector-footer .el-button {
+  width: 100%;
+  min-height: var(--sj-control-primary);
+  border-color: var(--sj-lime);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-canvas);
+  background: var(--sj-lime);
+  font-weight: 700;
+}
+.inspector-footer .el-button:hover,
+.inspector-footer .el-button:focus-visible {
+  border-color: var(--sj-lime);
+  color: var(--sj-canvas);
+  background: var(--sj-lime);
+}
+
+@media (max-width: 520px) {
+  .summary-route { grid-template-columns: 1fr var(--sj-space-8) 1fr; }
+  .todo-item { grid-template-columns: minmax(0, 1fr) var(--sj-control-dense); }
+  .todo-content-input { grid-column: 1 / 3; }
+  .todo-status-lights { grid-column: 1; }
+  .todo-delete-button { grid-column: 2; grid-row: 2; }
+  .todo-composer { grid-template-columns: 1fr; }
+  .todo-composer .todo-secondary-action { min-height: var(--sj-control-default); }
+}
 </style>

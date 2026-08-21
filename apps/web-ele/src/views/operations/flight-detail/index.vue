@@ -22,8 +22,13 @@ const detailUrl = computed(() => {
 
 function handleDetailMessage(event: MessageEvent) {
   if (event.origin !== window.location.origin || event.data !== 'flight-detail:back') return;
+  const routeName = route.path.startsWith('/demo/')
+    ? 'FlightPlanDemo'
+    : route.path.startsWith('/preview/')
+      ? 'FlightPlanPreview'
+      : 'FlightPlan';
   void router.push({
-    name: route.path.startsWith('/demo/') ? 'FlightPlanDemo' : 'FlightPlan',
+    name: routeName,
   });
 }
 
@@ -48,7 +53,7 @@ onBeforeUnmount(() => window.removeEventListener('message', handleDetailMessage)
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
-  background: #edf0f3;
+  background: #07090e;
 }
 
 .flight-detail-frame {
@@ -56,6 +61,6 @@ onBeforeUnmount(() => window.removeEventListener('message', handleDetailMessage)
   width: 100%;
   height: 100%;
   border: 0;
-  background: #edf0f3;
+  background: #07090e;
 }
 </style>
