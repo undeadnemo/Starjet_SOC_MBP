@@ -7,6 +7,8 @@ import { initStores } from '@vben/stores';
 import '@vben/styles';
 import '@vben/styles/ele';
 
+import './styles/starjet-mission-control-dark.css';
+
 import { useTitle } from '@vueuse/core';
 import { ElLoading } from 'element-plus';
 

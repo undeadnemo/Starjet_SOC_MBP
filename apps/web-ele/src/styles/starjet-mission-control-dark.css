@@ -1,0 +1,98 @@
+/*
+ * Starjet Mission Control Dark
+ * Human guidance: docs/design-system/starjet-mission-control-dark.md
+ * Opt in by adding data-starjet-theme="mission-control-dark" or the
+ * .sj-mission-control class to the operational workspace root.
+ */
+
+:root,
+[data-starjet-theme='mission-control-dark'] {
+  --sj-canvas: #07090e;
+  --sj-surface-1: #0b0e14;
+  --sj-surface-2: #0f141d;
+  --sj-surface-3: #151b26;
+  --sj-surface-4: #1b2330;
+  --sj-grid: #182131;
+  --sj-border: #202a3a;
+  --sj-border-strong: #334155;
+
+  --sj-text-1: #f4f7fb;
+  --sj-text-2: #a8b2c1;
+  --sj-text-3: #727e90;
+  --sj-text-disabled: #4a5565;
+
+  --sj-blue: #4d9eff;
+  --sj-blue-soft: rgb(77 158 255 / 14%);
+  --sj-lime: #a8e63d;
+  --sj-lime-soft: rgb(168 230 61 / 12%);
+  --sj-amber: #f6b943;
+  --sj-amber-soft: rgb(246 185 67 / 13%);
+  --sj-red: #ff625b;
+  --sj-red-soft: rgb(255 98 91 / 13%);
+  --sj-purple: #b579ff;
+  --sj-purple-soft: rgb(181 121 255 / 14%);
+  --sj-teal: #3dd6c1;
+  --sj-teal-soft: rgb(61 214 193 / 13%);
+
+  --sj-font-ui: Inter, 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei',
+    system-ui, sans-serif;
+  --sj-font-data: 'JetBrains Mono', 'SFMono-Regular', 'Roboto Mono', Consolas,
+    monospace;
+
+  --sj-space-1: 4px;
+  --sj-space-2: 8px;
+  --sj-space-3: 12px;
+  --sj-space-4: 16px;
+  --sj-space-5: 20px;
+  --sj-space-6: 24px;
+  --sj-space-8: 32px;
+
+  --sj-radius-tag: 4px;
+  --sj-radius-control: 6px;
+  --sj-radius-panel: 8px;
+  --sj-radius-overlay: 12px;
+
+  --sj-control-dense: 32px;
+  --sj-control-default: 36px;
+  --sj-control-primary: 40px;
+
+  --sj-shadow-panel: 0 12px 32px rgb(0 0 0 / 28%);
+  --sj-shadow-selected: 0 0 0 1px rgb(77 158 255 / 44%),
+    0 0 18px rgb(77 158 255 / 16%);
+  --sj-focus-ring: 0 0 0 2px var(--sj-canvas),
+    0 0 0 4px var(--sj-blue);
+
+  --sj-duration-fast: 120ms;
+  --sj-duration-normal: 160ms;
+  --sj-duration-panel: 200ms;
+}
+
+.sj-mission-control,
+[data-starjet-theme='mission-control-dark'] {
+  color: var(--sj-text-1);
+  background: var(--sj-canvas);
+  font-family: var(--sj-font-ui);
+  color-scheme: dark;
+}
+
+.sj-mission-control :is(code, time, .sj-data) {
+  font-family: var(--sj-font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.sj-mission-control :is(button, a, input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow: var(--sj-focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sj-mission-control *,
+  .sj-mission-control *::before,
+  .sj-mission-control *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
