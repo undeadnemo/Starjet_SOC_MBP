@@ -1,0 +1,2 @@
+import{Hr as e,In as t,Kr as n,Nn as r,Ur as i,nn as a}from"../jse/index-index-R7gjga-s.js";var o=r({name:`RenderContent`,props:{content:{default:void 0,type:[Object,String,Function]},renderBr:{default:!1,type:Boolean}},setup(r,{attrs:o,slots:s}){return()=>{if(!r.content)return null;if(!((i(r.content)||e(r.content))&&r.content!==null))if(r.renderBr&&n(r.content)){let e=r.content.split(`
+`),n=[];for(let[r,i]of e.entries())n.push(t(`p`,{key:r},i));return n}else return r.content;return t(r.content,a(a({},o),{},{props:a(a({},r),o)}),s)}}});export{o as t};
