@@ -14,12 +14,17 @@ const detailUrl = computed(() => {
     if (Array.isArray(value)) value.forEach((item) => item && search.append(key, item));
     else if (value !== null && value !== undefined) search.set(key, String(value));
   });
-  return `/flight-detail/index.html?${search.toString()}`;
+  const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+    ? import.meta.env.BASE_URL
+    : `${import.meta.env.BASE_URL}/`;
+  return `${baseUrl}flight-detail/index.html?${search.toString()}`;
 });
 
 function handleDetailMessage(event: MessageEvent) {
   if (event.origin !== window.location.origin || event.data !== 'flight-detail:back') return;
-  void router.push({ name: 'FlightPlan' });
+  void router.push({
+    name: route.path.startsWith('/demo/') ? 'FlightPlanDemo' : 'FlightPlan',
+  });
 }
 
 onMounted(() => window.addEventListener('message', handleDetailMessage));

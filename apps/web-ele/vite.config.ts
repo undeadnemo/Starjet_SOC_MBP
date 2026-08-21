@@ -6,6 +6,10 @@ export default defineConfig(async () => {
   return {
     application: {},
     vite: {
+      base:
+        process.env.VITE_PUBLIC_DEMO === 'true'
+          ? '/Starjet_SOC_MBP/'
+          : undefined,
       plugins: [
         ElementPlus({
           format: 'esm',

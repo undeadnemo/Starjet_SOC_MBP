@@ -185,8 +185,9 @@ async function goToday() {
 }
 
 function openFlight(flight: FlightPlanItem) {
+  const isDemo = router.currentRoute.value.path.startsWith('/demo/');
   void router.push({
-    name: 'FlightDetail',
+    name: isDemo ? 'FlightDetailDemo' : 'FlightDetail',
     params: { flightId: flight.id },
     query: {
       aircraft: flight.aircraft,

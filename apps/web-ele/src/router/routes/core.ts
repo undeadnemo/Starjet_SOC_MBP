@@ -7,6 +7,38 @@ import { $t } from '#/locales';
 
 const BasicLayout = () => import('#/layouts/basic.vue');
 const AuthPageLayout = () => import('#/layouts/auth.vue');
+const isPublicDemo = import.meta.env.VITE_PUBLIC_DEMO === 'true';
+
+const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
+  ? [
+      {
+        name: 'FlightPlanDemo',
+        path: '/demo/flight-plan',
+        component: () =>
+          import('#/views/operations/flight-plan/content.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航班计划 Demo',
+        },
+      },
+      {
+        name: 'FlightDetailDemo',
+        path: '/demo/flight-detail/:flightId?',
+        component: () =>
+          import('#/views/operations/flight-detail/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航班详情 Demo',
+        },
+      },
+    ]
+  : [];
 
 /**
  * 本地开发预览页。
@@ -59,7 +91,9 @@ const coreRoutes: RouteRecordRaw[] = [
     },
     name: 'Root',
     path: '/',
-    redirect: preferences.app.defaultHomePath,
+    redirect: isPublicDemo
+      ? '/demo/flight-plan'
+      : preferences.app.defaultHomePath,
     children: [],
   },
   {
@@ -117,6 +151,7 @@ const coreRoutes: RouteRecordRaw[] = [
     ],
   },
   ...developmentPreviewRoutes,
+  ...publicDemoRoutes,
 ];
 
 export { coreRoutes, fallbackNotFoundRoute };
