@@ -7,6 +7,30 @@ import { $t } from '#/locales';
 
 const BasicLayout = () => import('#/layouts/basic.vue');
 const AuthPageLayout = () => import('#/layouts/auth.vue');
+
+/**
+ * 本地开发预览页。
+ *
+ * 使用 import.meta.env.DEV 确保生产构建不会注册免登录预览路由，
+ * 正式环境仍必须通过后端菜单和角色权限访问航班计划。
+ */
+const developmentPreviewRoutes: RouteRecordRaw[] = import.meta.env.DEV
+  ? [
+      {
+        name: 'FlightPlanPreview',
+        path: '/preview/flight-plan',
+        component: () =>
+          import('#/views/operations/flight-plan/content.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航班计划预览',
+        },
+      },
+    ]
+  : [];
 /** 全局404页面 */
 const fallbackNotFoundRoute: RouteRecordRaw = {
   component: () => import('#/views/_core/fallback/not-found.vue'),
@@ -92,6 +116,7 @@ const coreRoutes: RouteRecordRaw[] = [
       },
     ],
   },
+  ...developmentPreviewRoutes,
 ];
 
 export { coreRoutes, fallbackNotFoundRoute };

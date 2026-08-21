@@ -546,12 +546,7 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
       class="flex flex-1 flex-col overflow-hidden transition-all duration-300 ease-in"
     >
       <div
-        :class="[
-          {
-            'shadow-[0_16px_24px_hsl(var(--background))]': scrollY > 20,
-          },
-          SCROLL_FIXED_CLASS,
-        ]"
+        :class="SCROLL_FIXED_CLASS"
         :style="headerWrapperStyle"
         class="overflow-hidden transition-all duration-200"
       >

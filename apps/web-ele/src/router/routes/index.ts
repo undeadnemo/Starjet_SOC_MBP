@@ -4,6 +4,21 @@ import { mergeRouteModules, traverseTreeValues } from '@vben/utils';
 
 import { coreRoutes, fallbackNotFoundRoute } from './core';
 
+const protectedRoutes: RouteRecordRaw[] = [
+  {
+    name: 'FlightDetail',
+    path: '/operations/flight-detail/:flightId?',
+    component: () =>
+      import('#/views/operations/flight-detail/index.vue'),
+    meta: {
+      activePath: '/operations/flight-plan',
+      hideInMenu: true,
+      icon: 'lucide:plane-takeoff',
+      title: '航班详情',
+    },
+  },
+];
+
 const dynamicRouteFiles = import.meta.glob('./modules/**/*.ts', {
   eager: true,
 });
@@ -25,6 +40,7 @@ const externalRoutes: RouteRecordRaw[] = [];
  *  无需走权限验证（会一直显示在菜单中） */
 const routes: RouteRecordRaw[] = [
   ...coreRoutes,
+  ...protectedRoutes,
   ...externalRoutes,
   fallbackNotFoundRoute,
 ];
