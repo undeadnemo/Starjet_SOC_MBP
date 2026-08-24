@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import type { NotificationItem } from '@vben/layouts';
+import type { MenuRecordRaw } from '@vben/types';
 
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
@@ -83,6 +84,135 @@ const { destroyWatermark, updateWatermark } = useWatermark();
 const { isDark } = usePreferences();
 const showDot = computed(() =>
   notifications.value.some((item) => !item.isRead),
+);
+const crewUnassignedCount = ref(5);
+
+function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
+  return [
+    {
+      children: [
+        {
+          icon: 'lucide:route',
+          name: '行程管理',
+          path: `${prefix}/trips`,
+        },
+        {
+          icon: 'lucide:calendar-range',
+          name: '航班计划',
+          path: `${prefix}/flight-plan`,
+        },
+        {
+          icon: 'lucide:badge-check',
+          name: '飞行放行',
+          path: `${prefix}/flight-release`,
+        },
+        {
+          icon: 'lucide:list-checks',
+          name: '保障进程',
+          path: `${prefix}/service-progress`,
+        },
+      ],
+      icon: 'lucide:plane',
+      name: '航班管理',
+      path: `${prefix}/operations`,
+    },
+    {
+      children: [
+        {
+          badge: String(crewUnassignedCount.value),
+          badgeType: 'normal',
+          badgeVariants: 'warning',
+          icon: 'lucide:users-round',
+          name: '机组排班',
+          path: `${prefix}/crew-roster`,
+        },
+        {
+          icon: 'lucide:id-card',
+          name: '机组信息',
+          path: `${prefix}/crew-info`,
+        },
+      ],
+      icon: 'lucide:contact-round',
+      name: '机组管理',
+      path: `${prefix}/crew`,
+    },
+    {
+      children: [
+        {
+          disabled: true,
+          icon: 'lucide:users',
+          name: '用户管理',
+          path: `${prefix}/system/users`,
+        },
+      ],
+      icon: 'lucide:settings',
+      name: '系统管理',
+      path: `${prefix}/system`,
+    },
+    {
+      children: [
+        {
+          disabled: true,
+          icon: 'lucide:database',
+          name: '飞机与机场数据',
+          path: `${prefix}/master-data/aviation`,
+        },
+      ],
+      icon: 'lucide:database',
+      name: '主数据管理',
+      path: `${prefix}/master-data`,
+    },
+    {
+      children: [
+        {
+          disabled: true,
+          icon: 'lucide:files',
+          name: '文件中心',
+          path: `${prefix}/files/center`,
+        },
+      ],
+      icon: 'lucide:paperclip',
+      name: '文件管理',
+      path: `${prefix}/files`,
+    },
+  ];
+}
+
+function updateCrewRosterBadge(count: number) {
+  crewUnassignedCount.value = count;
+  const visit = (items: MenuRecordRaw[]) => {
+    items.forEach((item) => {
+      if (item.path?.endsWith('/crew-roster')) {
+        item.badge = String(count);
+        item.badgeType = 'normal';
+        item.badgeVariants = 'warning';
+      }
+      if (item.children) visit(item.children);
+    });
+  };
+  visit(accessStore.accessMenus as MenuRecordRaw[]);
+}
+
+function handleCrewUnassignedCount(event: Event) {
+  const count = Number((event as CustomEvent<number>).detail);
+  if (Number.isFinite(count)) updateCrewRosterBadge(count);
+}
+
+onMounted(() => window.addEventListener('starjet:crew-unassigned-count', handleCrewUnassignedCount));
+onBeforeUnmount(() => window.removeEventListener('starjet:crew-unassigned-count', handleCrewUnassignedCount));
+
+watch(
+  () => router.currentRoute.value.path,
+  (path) => {
+    if (accessStore.accessMenus.length > 0) return;
+    const prefix = path.startsWith('/demo/')
+      ? '/demo'
+      : path.startsWith('/preview/')
+        ? '/preview'
+        : null;
+    if (prefix) accessStore.setAccessMenus(createPreviewMenus(prefix));
+  },
+  { immediate: true },
 );
 
 const menus = computed(() => [

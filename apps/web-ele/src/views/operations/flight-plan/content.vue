@@ -46,7 +46,7 @@ type FlightPhase =
   | 'preparing';
 type FlightType = 'AOG' | 'FERRY' | 'MX' | 'PAX';
 type TodoStatus = 'blocked' | 'completed' | 'pending';
-type ViewMode = 'calendar' | 'list' | 'timeline';
+type ViewMode = 'calendar' | 'gantt' | 'list' | 'timeline';
 
 interface FlightPlanItem {
   aircraft: string;
@@ -70,6 +70,16 @@ interface FlightTodo {
   status: TodoStatus;
 }
 
+interface GanttFlightRelation {
+  aircraft: string;
+  durationMinutes: number;
+  endMinute: number;
+  fromFlightId: string;
+  startMinute: number;
+  toFlightId: string;
+  type: 'overlap' | 'turnaround';
+}
+
 interface AirportInfo {
   city: string;
   iata: string;
@@ -88,6 +98,7 @@ const aircraftFilter = ref('all');
 const typeFilter = ref('all');
 const timezone = ref('UTC+08:00 China/Shanghai');
 const timelineScrollRef = ref<HTMLElement>();
+const ganttScrollRef = ref<HTMLElement>();
 const timelineHeaderTrackRef = ref<HTMLElement>();
 const timelineViewportWidth = ref(0);
 const requestedTimelineDays = ref(5);
@@ -140,6 +151,10 @@ const flightTodos = reactive<Record<string, FlightTodo[]>>({
     { content: '确认旅客特殊餐食', id: 'TODO-6', status: 'pending' },
     { content: '等待加油订单回执', id: 'TODO-7', status: 'blocked' },
   ],
+  'FP-212': [
+    { content: '调整前序航段到达时间', id: 'TODO-8', status: 'blocked' },
+    { content: '重新确认机组执勤衔接', id: 'TODO-9', status: 'pending' },
+  ],
 });
 
 const newTodo = reactive({
@@ -158,6 +173,7 @@ const flights = ref<FlightPlanItem[]>([
   { aircraft: 'B-9811', date: '2026-08-20', flightNo: 'MX-207', from: 'ZSPD', fuel: '加油不适用', id: 'FP-209', permit: '机务窗口 已确认', phase: 'maintenance', sta: '1800', std: '1000', to: 'ZSPD', type: 'MX' },
   { aircraft: 'B-9308', date: '2026-08-21', flightNo: 'SJX305', from: 'ZSPD', fuel: '加油 WFS 异常', id: 'FP-210', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1620', std: '1330', to: 'ZGGG', type: 'PAX' },
   { aircraft: 'B-602M', date: '2026-08-22', flightNo: 'SJX603', from: 'ZGGG', fuel: '加油 WFS 已确认', id: 'FP-211', permit: '许可 & 地服 已确认', phase: 'arrived', sta: '1040', std: '0820', to: 'ZGSZ', type: 'PAX' },
+  { aircraft: 'B-602M', date: '2026-08-22', flightNo: 'SJX604', from: 'ZGSZ', fuel: '加油 WFS 待确认', id: 'FP-212', permit: '许可 & 地服待处理 异常', phase: 'preparing', sta: '1230', std: '1010', to: 'ZBAA', type: 'PAX' },
 ]);
 
 const addForm = reactive({
@@ -197,13 +213,10 @@ const visibleMonthFlights = computed(() => {
   const prefix = `${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}`;
   return filteredFlights.value.filter((flight) => flight.date.startsWith(prefix));
 });
-const operationalMetrics = computed(() => [
-  { label: '计划任务', tone: 'blue', value: visibleMonthFlights.value.length },
-  { label: 'AOG 停场', tone: 'red', value: visibleMonthFlights.value.filter((flight) => flight.type === 'AOG').length },
-  { label: '保障异常', tone: 'amber', value: visibleMonthFlights.value.filter((flight) => flight.fuel.includes('异常') || flight.permit.includes('异常')).length },
-  { label: '排班冲突', tone: 'coral', value: 0 },
-  { label: '按时放行率', tone: 'lime', value: '92%' },
-]);
+const ganttAircrafts = computed(() => aircraftFilter.value === 'all'
+  ? aircraftOptions.value
+  : aircraftOptions.value.filter((aircraft) => aircraft === aircraftFilter.value));
+const ganttFlightRelations = computed(() => ganttAircrafts.value.flatMap((aircraft) => getGanttFlightRelations(aircraft)));
 const visibleTimelineDays = computed(() => requestedTimelineDays.value);
 const timelineStyle = computed<CSSProperties>(() => {
   const columnWidth = timelineViewportWidth.value / visibleTimelineDays.value;
@@ -218,6 +231,12 @@ const currentTimeTop = computed(() => (
   (now.value.hour() * 60 + now.value.minute() + now.value.second() / 60) / 1440
 ) * 100);
 const currentTimeLabel = computed(() => now.value.format('HH:mm'));
+const ganttCurrentTimeLeft = computed(() => {
+  const monthMatches = now.value.year() === selectedYear.value && now.value.month() + 1 === selectedMonth.value;
+  if (!monthMatches) return undefined;
+  const elapsedDays = now.value.date() - 1 + (now.value.hour() * 60 + now.value.minute()) / 1440;
+  return (elapsedDays / days.value.length) * 100;
+});
 const selectedFlightTodos = computed(() => selectedFlight.value
   ? (flightTodos[selectedFlight.value.id] ?? [])
   : []);
@@ -230,6 +249,10 @@ const selectedArrivalAirport = computed(() => selectedFlight.value
 
 function flightsForDay(date: string) {
   return visibleMonthFlights.value.filter((flight) => flight.date === date);
+}
+
+function flightsForAircraft(aircraft: string) {
+  return visibleMonthFlights.value.filter((flight) => flight.aircraft === aircraft);
 }
 
 function getAirportInfo(code: string): AirportInfo {
@@ -303,6 +326,92 @@ function flightTimeToMinutes(time: string) {
   return Number(time.slice(0, 2)) * 60 + Number(time.slice(2));
 }
 
+function flightAbsoluteRange(flight: FlightPlanItem) {
+  const monthStart = dayjs(`${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}-01`);
+  const dayOffset = dayjs(flight.date).startOf('day').diff(monthStart, 'day') * 1440;
+  const start = dayOffset + flightTimeToMinutes(flight.std);
+  const arrivalMinute = flightTimeToMinutes(flight.sta);
+  const end = dayOffset + arrivalMinute + (arrivalMinute < flightTimeToMinutes(flight.std) ? 1440 : 0);
+  return { end, start };
+}
+
+function getGanttFlightRelations(aircraft: string): GanttFlightRelation[] {
+  const aircraftFlights = flightsForAircraft(aircraft)
+    .map((flight) => ({ flight, ...flightAbsoluteRange(flight) }))
+    .sort((left, right) => left.start - right.start);
+
+  return aircraftFlights.slice(1).flatMap((current, index) => {
+    const previous = aircraftFlights[index];
+    if (!previous) return [];
+    const gapMinutes = current.start - previous.end;
+    if (gapMinutes >= 360) return [];
+
+    const isOverlap = gapMinutes < 0;
+    return [{
+      aircraft,
+      durationMinutes: Math.abs(gapMinutes),
+      endMinute: isOverlap ? previous.end : current.start,
+      fromFlightId: previous.flight.id,
+      startMinute: isOverlap ? current.start : previous.end,
+      toFlightId: current.flight.id,
+      type: isOverlap ? 'overlap' : 'turnaround',
+    } satisfies GanttFlightRelation];
+  });
+}
+
+function getGanttRelationStyle(relation: GanttFlightRelation): CSSProperties {
+  const totalMinutes = days.value.length * 1440;
+  return {
+    left: `${(relation.startMinute / totalMinutes) * 100}%`,
+    width: `${Math.max(((relation.endMinute - relation.startMinute) / totalMinutes) * 100, 0.18)}%`,
+  };
+}
+
+function formatGanttRelationDuration(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return [hours ? `${hours}小时` : '', remainingMinutes ? `${remainingMinutes}分` : '']
+    .filter(Boolean)
+    .join('') || '0分';
+}
+
+function hasGanttOverlap(flight: FlightPlanItem) {
+  return ganttFlightRelations.value.some((relation) =>
+    relation.type === 'overlap' &&
+    (relation.fromFlightId === flight.id || relation.toFlightId === flight.id),
+  );
+}
+
+function aircraftHasGanttOverlap(aircraft: string) {
+  return ganttFlightRelations.value.some((relation) =>
+    relation.type === 'overlap' && relation.aircraft === aircraft,
+  );
+}
+
+function getGanttOverlapRole(flight: FlightPlanItem) {
+  const relation = ganttFlightRelations.value.find((item) =>
+    item.type === 'overlap' &&
+    (item.fromFlightId === flight.id || item.toFlightId === flight.id),
+  );
+  if (!relation) return undefined;
+  return relation.fromFlightId === flight.id ? 'overlap-before' : 'overlap-after';
+}
+
+function getGanttBarStyle(flight: FlightPlanItem): CSSProperties {
+  const startMinute = flightTimeToMinutes(flight.std);
+  const endMinute = flightTimeToMinutes(flight.sta);
+  const duration = endMinute >= startMinute
+    ? endMinute - startMinute
+    : 1440 - startMinute + endMinute;
+  const dayIndex = dayjs(flight.date).date() - 1;
+  const totalMinutes = days.value.length * 1440;
+  return {
+    ...getAircraftStyle(flight.aircraft),
+    left: `${((dayIndex * 1440 + startMinute) / totalMinutes) * 100}%`,
+    width: `${Math.max((duration / totalMinutes) * 100, 0.35)}%`,
+  };
+}
+
 function getTurnaroundLabel(flight: FlightPlanItem) {
   const departureMinute = flightTimeToMinutes(flight.std);
   const previousFlight = flights.value
@@ -351,7 +460,9 @@ function getCardStyle(flight: FlightPlanItem, index: number): CSSProperties {
 
 async function scrollToDay(day: number, behavior: ScrollBehavior = 'smooth') {
   await nextTick();
-  const scroller = timelineScrollRef.value;
+  const scroller = viewMode.value === 'gantt'
+    ? ganttScrollRef.value
+    : timelineScrollRef.value;
   const target = scroller?.querySelector<HTMLElement>(`[data-day="${day}"]`);
   if (!scroller || !target) return;
   const left = target.offsetLeft - (scroller.clientWidth - target.offsetWidth) / 2;
@@ -375,6 +486,10 @@ function openFlight(flight: FlightPlanItem) {
 function goToFlightDetail(flight: FlightPlanItem) {
   const isDemo = router.currentRoute.value.path.startsWith('/demo/');
   const isPreview = router.currentRoute.value.path.startsWith('/preview/');
+  const todos = todosForFlight(flight).map(({ content, status }) => ({
+    content,
+    status,
+  }));
   void router.push({
     name: isDemo ? 'FlightDetailDemo' : isPreview ? 'FlightDetailPreview' : 'FlightDetail',
     params: { flightId: flight.id },
@@ -386,6 +501,7 @@ function goToFlightDetail(flight: FlightPlanItem) {
       sta: flight.sta,
       std: flight.std,
       to: flight.to,
+      todos: JSON.stringify(todos),
       type: flight.type,
     },
   });
@@ -455,8 +571,10 @@ let dragStartScrollLeft = 0;
 let dragging = false;
 
 function onTimelinePointerDown(event: PointerEvent) {
-  if ((event.target as HTMLElement).closest('.flight-card')) return;
-  const scroller = timelineScrollRef.value;
+  if ((event.target as HTMLElement).closest('.flight-card, .gantt-flight-bar')) return;
+  const scroller = viewMode.value === 'gantt'
+    ? ganttScrollRef.value
+    : timelineScrollRef.value;
   if (!scroller) return;
   dragging = true;
   dragStartX = event.clientX;
@@ -466,15 +584,21 @@ function onTimelinePointerDown(event: PointerEvent) {
 }
 
 function onTimelinePointerMove(event: PointerEvent) {
-  if (!dragging || !timelineScrollRef.value) return;
-  timelineScrollRef.value.scrollLeft = dragStartScrollLeft - (event.clientX - dragStartX);
+  const scroller = viewMode.value === 'gantt'
+    ? ganttScrollRef.value
+    : timelineScrollRef.value;
+  if (!dragging || !scroller) return;
+  scroller.scrollLeft = dragStartScrollLeft - (event.clientX - dragStartX);
 }
 
 function onTimelinePointerUp(event: PointerEvent) {
+  const scroller = viewMode.value === 'gantt'
+    ? ganttScrollRef.value
+    : timelineScrollRef.value;
   dragging = false;
-  timelineScrollRef.value?.classList.remove('is-dragging');
-  if (timelineScrollRef.value?.hasPointerCapture(event.pointerId)) {
-    timelineScrollRef.value.releasePointerCapture(event.pointerId);
+  scroller?.classList.remove('is-dragging');
+  if (scroller?.hasPointerCapture(event.pointerId)) {
+    scroller.releasePointerCapture(event.pointerId);
   }
 }
 
@@ -500,11 +624,13 @@ function updateTimelineViewport(width: number) {
 async function setupTimelineResizeObserver() {
   timelineResizeObserver?.disconnect();
   timelineResizeObserver = undefined;
-  if (viewMode.value !== 'timeline') return;
+  if (!['gantt', 'timeline'].includes(viewMode.value)) return;
 
   await nextTick();
-  if (viewMode.value !== 'timeline') return;
-  const scroller = timelineScrollRef.value;
+  if (!['gantt', 'timeline'].includes(viewMode.value)) return;
+  const scroller = viewMode.value === 'gantt'
+    ? ganttScrollRef.value
+    : timelineScrollRef.value;
   if (!scroller) return;
 
   updateTimelineViewport(scroller.getBoundingClientRect().width);
@@ -537,44 +663,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="flight-plan-page sj-mission-control">
     <section class="plan-toolbar" aria-label="航班计划筛选">
-      <header class="mission-header">
-        <div class="mission-identity">
-          <span class="soc-mark">SOC</span>
-          <span>
-            <strong>运行控制中心</strong>
-            <small>FLEET {{ aircraftOptions.length }} · TASKS {{ visibleMonthFlights.length }} · UTC BASE</small>
-          </span>
-        </div>
-        <div class="mission-status"><i></i>运行监控中</div>
-      </header>
-      <div class="toolbar-main">
-        <div class="view-switch" aria-label="视图切换">
-          <ElButton :class="{ active: viewMode === 'timeline' }" @click="viewMode = 'timeline'">时间线</ElButton>
-          <ElButton :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">列表</ElButton>
-          <ElButton :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">日历</ElButton>
-        </div>
-        <div class="date-selectors" aria-label="计划日期">
-          <ElSelect v-model="selectedYear" aria-label="年份" class="year-select">
-            <ElOption v-for="year in yearOptions" :key="year" :label="`${year}年`" :value="year" />
-          </ElSelect>
-          <ElSelect v-model="selectedMonth" aria-label="月份" class="month-select">
-            <ElOption v-for="month in monthOptions" :key="month" :label="`${month}月`" :value="month" />
-          </ElSelect>
-          <ElSelect v-model="selectedDay" aria-label="日期" class="day-select" @change="scrollToDay(Number($event))">
-            <ElOption v-for="day in days" :key="day.day" :label="`${day.day}日`" :value="day.day" />
-          </ElSelect>
-        </div>
-        <ElButton class="today-button" @click="goToday">回到今天</ElButton>
-        <div class="toolbar-spacer"></div>
-        <label class="timezone-field">
-          <span>时区</span>
-          <ElSelect v-model="timezone" aria-label="时区">
-            <ElOption label="UTC+08:00 China/Shanghai" value="UTC+08:00 China/Shanghai" />
-            <ElOption label="UTC+00:00 UTC" value="UTC+00:00 UTC" />
-          </ElSelect>
-        </label>
-        <ElButton type="primary" class="add-button" @click="addDialogVisible = true">添加航班</ElButton>
-      </div>
       <div class="toolbar-filters">
         <label>
           <span>注册号</span>
@@ -593,24 +681,41 @@ onBeforeUnmount(() => {
             <ElOption label="AOG" value="AOG" />
           </ElSelect>
         </label>
-        <label v-if="viewMode === 'timeline'">
+        <label v-if="viewMode === 'timeline' || viewMode === 'gantt'">
           <span>每屏天数</span>
           <ElSelect v-model="requestedTimelineDays" aria-label="每屏天数">
             <ElOption v-for="count in [3, 4, 5, 6, 7]" :key="count" :label="`${count} 天`" :value="count" />
           </ElSelect>
         </label>
-        <p class="task-count">当前显示 <strong>{{ visibleMonthFlights.length }}</strong> 个任务</p>
+        <div class="toolbar-spacer"></div>
+        <label class="timezone-field">
+          <span>时区</span>
+          <ElSelect v-model="timezone" aria-label="时区">
+            <ElOption label="UTC+08:00 China/Shanghai" value="UTC+08:00 China/Shanghai" />
+            <ElOption label="UTC+00:00 UTC" value="UTC+00:00 UTC" />
+          </ElSelect>
+        </label>
+        <ElButton type="primary" class="add-button" @click="addDialogVisible = true">添加航班</ElButton>
       </div>
-      <div class="operations-strip" aria-label="运行指标">
-        <div v-for="metric in operationalMetrics" :key="metric.label" class="operation-metric">
-          <i :class="`tone-${metric.tone}`"></i>
-          <strong>{{ metric.value }}</strong>
-          <span>{{ metric.label }}</span>
+      <div class="toolbar-main">
+        <div class="view-switch" aria-label="视图切换">
+          <ElButton :class="{ active: viewMode === 'timeline' }" @click="viewMode = 'timeline'">时间线</ElButton>
+          <ElButton :class="{ active: viewMode === 'gantt' }" @click="viewMode = 'gantt'">甘特图</ElButton>
+          <ElButton :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">列表</ElButton>
+          <ElButton :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">日历</ElButton>
         </div>
-        <div class="type-filters" aria-label="航班类型快速筛选">
-          <button :class="{ active: typeFilter === 'all' }" @click="typeFilter = 'all'">全部</button>
-          <button v-for="type in ['PAX', 'FERRY', 'MX', 'AOG']" :key="type" :class="{ active: typeFilter === type }" @click="typeFilter = type">{{ type }}</button>
+        <div class="date-selectors" aria-label="计划日期">
+          <ElSelect v-model="selectedYear" aria-label="年份" class="year-select">
+            <ElOption v-for="year in yearOptions" :key="year" :label="`${year}年`" :value="year" />
+          </ElSelect>
+          <ElSelect v-model="selectedMonth" aria-label="月份" class="month-select">
+            <ElOption v-for="month in monthOptions" :key="month" :label="`${month}月`" :value="month" />
+          </ElSelect>
+          <ElSelect v-model="selectedDay" aria-label="日期" class="day-select" @change="scrollToDay(Number($event))">
+            <ElOption v-for="day in days" :key="day.day" :label="`${day.day}日`" :value="day.day" />
+          </ElSelect>
         </div>
+        <ElButton class="today-button" @click="goToday">回到今天</ElButton>
       </div>
     </section>
 
@@ -709,14 +814,108 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <section v-else-if="viewMode === 'gantt'" class="gantt-panel" aria-label="飞机航班甘特图">
+      <div class="gantt-layout">
+        <div class="gantt-aircraft-column">
+          <header><span>AIRCRAFT</span><small>注册号 / 月度任务</small></header>
+          <div v-for="aircraft in ganttAircrafts" :key="aircraft" :class="{ 'has-conflict': aircraftHasGanttOverlap(aircraft) }" :style="getAircraftStyle(aircraft)">
+            <strong class="aircraft-color-label">{{ aircraft }}</strong>
+            <span>{{ flightsForAircraft(aircraft).length }} 个任务</span>
+          </div>
+        </div>
+        <div
+          ref="ganttScrollRef"
+          class="gantt-scroll"
+          @pointerdown="onTimelinePointerDown"
+          @pointermove="onTimelinePointerMove"
+          @pointerup="onTimelinePointerUp"
+          @pointercancel="onTimelinePointerUp"
+        >
+          <div class="gantt-track timeline-track" :style="timelineStyle">
+            <header class="gantt-axis">
+              <div
+                v-for="day in days"
+                :key="day.key"
+                :data-day="day.day"
+                :class="{ today: day.isToday }"
+              >
+                <span>{{ day.label }}</span>
+                <small>{{ day.weekday }}</small>
+                <i><b>00</b><b>06</b><b>12</b><b>18</b></i>
+              </div>
+            </header>
+            <div class="gantt-rows">
+              <section v-for="aircraft in ganttAircrafts" :key="aircraft" :class="['gantt-row', { 'has-conflict': aircraftHasGanttOverlap(aircraft) }]">
+                <div class="gantt-day-grid" aria-hidden="true">
+                  <div v-for="day in days" :key="day.key" :class="{ today: day.isToday }">
+                    <i></i><i></i><i></i>
+                  </div>
+                </div>
+                <span
+                  v-for="relation in getGanttFlightRelations(aircraft)"
+                  :key="`${relation.fromFlightId}-${relation.toFlightId}`"
+                  :class="['gantt-relation', relation.type]"
+                  :style="getGanttRelationStyle(relation)"
+                  :aria-label="relation.type === 'overlap' ? `航段重叠 ${formatGanttRelationDuration(relation.durationMinutes)}` : `可用过站时间 ${formatGanttRelationDuration(relation.durationMinutes)}`"
+                  :title="relation.type === 'overlap' ? `警告：航段重叠 ${formatGanttRelationDuration(relation.durationMinutes)}` : `可用过站时间 ${formatGanttRelationDuration(relation.durationMinutes)}`"
+                >
+                  <CircleAlert v-if="relation.type === 'overlap'" aria-hidden="true" />
+                  {{ relation.type === 'overlap' ? '航段重叠' : '过站' }} {{ formatGanttRelationDuration(relation.durationMinutes) }}
+                </span>
+                <button
+                  v-for="flight in flightsForAircraft(aircraft)"
+                  :key="flight.id"
+                  :class="['gantt-flight-bar', `phase-${flight.phase}`, getGanttOverlapRole(flight), { 'has-overlap': hasGanttOverlap(flight) }]"
+                  :style="getGanttBarStyle(flight)"
+                  :title="`${flight.flightNo} · ${flight.from} ${formatFlightTime(flight.std)} → ${flight.to} ${formatFlightTime(flight.sta)}`"
+                  type="button"
+                  @click="openFlight(flight)"
+                >
+                  <span class="gantt-bar-head">
+                    <strong class="flight-type-tag"><component :is="flightTypeIcons[flight.type]" aria-hidden="true" />{{ flight.type }}</strong>
+                    <span class="gantt-bar-status" aria-label="待办事项状态">
+                      <i
+                        v-for="todo in todosForFlight(flight).slice(0, 4)"
+                        :key="todo.id"
+                        class="todo-status-light"
+                        :class="`status-${getTodoStatus(todo.status).color}`"
+                        :title="`${todo.content} · ${getTodoStatus(todo.status).label}`"
+                      ></i>
+                    </span>
+                  </span>
+                  <span class="gantt-bar-route">
+                    <span><b>{{ flight.from }}</b><time>{{ formatFlightTime(flight.std) }}</time></span>
+                    <i>→</i>
+                    <span><b>{{ flight.to }}</b><time>{{ formatFlightTime(flight.sta) }}</time></span>
+                  </span>
+                </button>
+              </section>
+            </div>
+            <span
+              v-if="ganttCurrentTimeLeft !== undefined"
+              class="gantt-current-time"
+              :style="{ left: `${ganttCurrentTimeLeft}%` }"
+            ><i>{{ currentTimeLabel }}</i></span>
+          </div>
+        </div>
+      </div>
+      <footer class="gantt-legend">
+        <span><i class="status-lime"></i>完成</span>
+        <span><i class="status-amber"></i>待处理</span>
+        <span><i class="status-red"></i>阻碍</span>
+        <span><i class="status-blue"></i>6小时内过站</span>
+        <span><i class="status-red"></i>航段重叠</span>
+        <small>拖动或横向滚动查看整月计划 · 点击航班打开检查器</small>
+      </footer>
+    </section>
+
     <section v-else-if="viewMode === 'calendar'" class="alternative-panel">
       <div class="calendar-grid">
         <article v-for="day in days" :key="day.key" class="calendar-day">
           <header><strong>{{ day.label }}</strong><span>{{ day.weekday }}</span></header>
           <button v-for="flight in flightsForDay(day.key)" :key="flight.id" class="calendar-flight" :style="getAircraftStyle(flight.aircraft)" @click="openFlight(flight)">
-            <span class="flight-type-tag"><component :is="flightTypeIcons[flight.type]" aria-hidden="true" />{{ flight.type }}</span>
             <span class="aircraft-color-label">{{ flight.aircraft }}</span>
-            <span>{{ flight.std }}Z · {{ flight.from }} → {{ flight.to }}</span>
+            <span>{{ flight.from }} → {{ flight.to }}</span>
           </button>
         </article>
       </div>
@@ -779,7 +978,7 @@ onBeforeUnmount(() => {
 
         <section class="todo-section" aria-labelledby="todo-section-title">
           <header>
-            <div><h3 id="todo-section-title">待办事项</h3><small>{{ selectedFlightTodos.length }} ITEMS</small></div>
+            <div><h3 id="todo-section-title">待办事项</h3></div>
             <div class="todo-legend">
               <span v-for="status in todoStatusOptions" :key="status.value" :class="`status-${status.color}`">
                 <i class="todo-status-light"></i>{{ status.label }}
@@ -813,7 +1012,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="todo-composer">
-            <ElInput v-model="newTodo.content" type="textarea" :rows="2" resize="none" placeholder="填写新的待办事项，可输入具体责任或下一步动作" />
+            <ElInput v-model="newTodo.content" type="textarea" :rows="2" resize="none" placeholder="填写待办事项" />
             <ElButton class="todo-secondary-action" @click="addTodo">添加待办</ElButton>
           </div>
         </section>
@@ -851,7 +1050,7 @@ onBeforeUnmount(() => {
 .plan-toolbar { display: grid; gap: 10px; padding: 14px 16px; }
 .toolbar-main, .toolbar-filters, .date-selectors, .view-switch { display: flex; align-items: center; gap: 8px; }
 .toolbar-main { align-items: flex-end; flex-wrap: wrap; }
-.toolbar-filters { align-items: flex-end; }
+.toolbar-filters { align-items: flex-end; flex-wrap: wrap; }
 .view-switch { height: 34px; gap: 0; padding: 2px; overflow: hidden; border: 1px solid #d9e0e8; border-radius: 7px; background: #f7f9fb; }
 .view-switch :deep(.el-button) { min-height: 28px; margin: 0; padding-inline: 13px; border: 0; border-radius: 5px; color: #52637a; font-size: 13px; font-weight: 600; background: transparent; box-shadow: none; }
 .view-switch :deep(.el-button.active) { color: #137c78; background: #e8f6f5; box-shadow: 0 1px 3px rgba(31,55,79,.12); }
@@ -866,9 +1065,9 @@ onBeforeUnmount(() => {
 .timezone-field, .toolbar-filters label { display: grid; gap: 2px; }
 .timezone-field > span, .toolbar-filters label > span { padding-left: 6px; color: #7b8798; font-size: 11px; }
 .timezone-field { width: 238px; }
+.toolbar-filters .timezone-field { width: 238px; }
 .add-button { min-width: 104px; min-height: 34px; border-radius: 6px; font-size: 13px; font-weight: 600; }
 .toolbar-filters label { width: 180px; }
-.task-count { display: flex; align-items: center; min-height: 34px; margin: 0 0 0 auto; color: #72839a; font-size: 12px; }
 .timeline-panel, .alternative-panel { margin-top: 12px; padding: 12px; }
 .timeline-sticky-header { position: sticky; top: 0; z-index: 20; padding-top: 1px; background: #fff; }
 .timeline-header-viewport { width: 100%; min-width: 0; overflow: hidden; border: 1px solid #dce3ea; border-radius: 10px 10px 0 0; background: #fff; }
@@ -948,6 +1147,69 @@ onBeforeUnmount(() => {
 .flight-card-todos { align-self: start; align-content: start; text-align: right; }
 .flight-card-todos > span { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 14px; align-items: center; gap: var(--sj-space-1); }
 .flight-card-todos i { max-width: 15em; overflow: hidden; color: #202833; font-size: 10px; font-style: normal; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.gantt-panel { min-width: 0; margin-top: 12px; overflow: hidden; border: 1px solid var(--sj-border); border-radius: var(--sj-radius-panel); background: var(--sj-canvas); }
+.gantt-layout {
+  --gantt-card-height: calc(var(--sj-space-6) * 2 + var(--sj-space-3));
+  --gantt-conflict-gap: var(--sj-space-8);
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 156px minmax(0, 1fr);
+}
+.gantt-aircraft-column { position: relative; z-index: 5; border-right: 1px solid var(--sj-border); background: var(--sj-surface-1); }
+.gantt-aircraft-column header { display: grid; height: 64px; padding: var(--sj-space-3); align-content: center; gap: var(--sj-space-1); border-bottom: 1px solid var(--sj-border); }
+.gantt-aircraft-column header span { color: var(--sj-text-1); font: 750 11px var(--sj-font-data); letter-spacing: .12em; }
+.gantt-aircraft-column header small { color: var(--sj-text-3); font-size: 9px; }
+.gantt-aircraft-column > div { display: grid; height: 92px; padding: var(--sj-space-3); align-content: center; gap: var(--sj-space-1); border-bottom: 1px solid var(--sj-border); }
+.gantt-aircraft-column strong { font: 750 14px var(--sj-font-data); letter-spacing: .04em; }
+.gantt-aircraft-column > div span { color: var(--sj-text-3); font: 10px var(--sj-font-data); }
+.gantt-scroll { min-width: 0; overflow-x: auto; cursor: grab; overscroll-behavior-inline: contain; scrollbar-color: var(--sj-border-strong) var(--sj-surface-1); scroll-snap-type: x proximity; }
+.gantt-scroll.is-dragging { cursor: grabbing; user-select: none; }
+.gantt-track { position: relative; }
+.gantt-axis { position: sticky; top: 0; z-index: 4; display: grid; height: 64px; grid-template-columns: repeat(var(--timeline-days), minmax(0, 1fr)); border-bottom: 1px solid var(--sj-border); background: var(--sj-surface-1); }
+.gantt-axis > div { position: relative; display: grid; min-width: 0; padding: var(--sj-space-2) var(--sj-space-3) 19px; align-content: center; grid-template-columns: auto 1fr; gap: var(--sj-space-2); border-right: 1px solid var(--sj-border); scroll-snap-align: start; }
+.gantt-axis > div.today { background: var(--sj-lime-soft); box-shadow: inset 0 -2px var(--sj-lime); }
+.gantt-axis > div > span { color: var(--sj-text-1); font: 750 12px var(--sj-font-data); }
+.gantt-axis > div.today > span { color: var(--sj-lime); }
+.gantt-axis > div > small { color: var(--sj-text-3); font: 9px var(--sj-font-data); letter-spacing: .08em; }
+.gantt-axis > div > i { position: absolute; right: 0; bottom: 3px; left: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); font-style: normal; }
+.gantt-axis > div > i b { padding-left: var(--sj-space-1); color: var(--sj-text-3); font: 8px var(--sj-font-data); }
+.gantt-row {
+  position: relative;
+  height: calc(var(--gantt-card-height) + var(--sj-space-2) * 2 + var(--sj-space-4));
+  overflow: hidden;
+  border-bottom: 1px solid var(--sj-border);
+  background: var(--sj-canvas);
+}
+.gantt-aircraft-column > div.has-conflict,
+.gantt-row.has-conflict { height: calc(var(--gantt-card-height) * 2 + var(--gantt-conflict-gap) + var(--sj-space-2) * 2); }
+.gantt-row:nth-child(even) { background: var(--sj-surface-1); }
+.gantt-day-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--timeline-days), minmax(0, 1fr)); }
+.gantt-day-grid > div { position: relative; border-right: 1px solid var(--sj-border); }
+.gantt-day-grid > div.today { background: var(--sj-lime-soft); }
+.gantt-day-grid > div i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--sj-grid); }
+.gantt-day-grid > div i:nth-child(1) { left: 25%; }
+.gantt-day-grid > div i:nth-child(2) { left: 50%; }
+.gantt-day-grid > div i:nth-child(3) { left: 75%; }
+.gantt-relation { position: absolute; z-index: 4; bottom: var(--sj-space-1); display: flex; min-width: 72px; height: var(--sj-space-4); padding: 0 var(--sj-space-1); overflow: visible; align-items: center; justify-content: center; gap: var(--sj-space-1); pointer-events: none; border: 1px solid var(--sj-blue); border-radius: var(--sj-radius-tag); color: var(--sj-blue); background: var(--sj-surface-4); font: 750 8px var(--sj-font-data); white-space: nowrap; }.gantt-relation::before, .gantt-relation::after { position: absolute; top: 50%; width: var(--sj-space-2); height: 1px; background: currentColor; content: ''; }.gantt-relation::before { right: 100%; }.gantt-relation::after { left: 100%; }.gantt-relation.overlap { z-index: 7; border-color: var(--sj-red); color: var(--sj-red); background: var(--sj-red-soft); }.gantt-relation svg { width: 11px; flex: 0 0 11px; }
+.gantt-flight-bar { position: absolute; z-index: 2; top: var(--sj-space-2); bottom: auto; display: grid; min-width: 118px; height: var(--gantt-card-height); padding: var(--sj-space-2); overflow: hidden; align-content: center; gap: var(--sj-space-1); border: 1px solid color-mix(in srgb, var(--aircraft-color) 62%, var(--sj-border)); border-left: 3px solid var(--aircraft-color); border-radius: var(--sj-radius-control); color: var(--sj-text-1); text-align: left; background: color-mix(in srgb, var(--aircraft-color) 20%, var(--sj-surface-2)); box-shadow: 0 0 0 1px var(--aircraft-soft) inset; cursor: pointer; }
+.gantt-flight-bar:hover, .gantt-flight-bar:focus-visible { z-index: 6; outline: 2px solid var(--sj-blue); outline-offset: -1px; }
+.gantt-flight-bar.has-overlap { z-index: 5; border-color: var(--sj-red); border-left-color: var(--sj-red); box-shadow: 0 0 0 1px var(--sj-red-soft) inset; }
+.gantt-row.has-conflict .gantt-flight-bar.overlap-before { top: var(--sj-space-2); }
+.gantt-row.has-conflict .gantt-flight-bar.overlap-after { top: calc(var(--sj-space-2) + var(--gantt-card-height) + var(--gantt-conflict-gap)); }
+.gantt-row.has-conflict .gantt-relation.overlap { top: calc(var(--sj-space-2) + var(--gantt-card-height) + var(--sj-space-2)); bottom: auto; }
+.gantt-bar-head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--sj-space-2); white-space: nowrap; }
+.gantt-bar-route { display: flex; min-width: 0; align-items: center; justify-content: flex-start; gap: var(--sj-space-2); white-space: nowrap; }
+.gantt-bar-route > span { display: grid; min-width: 0; gap: 1px; }
+.gantt-bar-route b { color: var(--sj-text-1); font: 800 13px var(--sj-font-data); letter-spacing: .04em; }
+.gantt-bar-route time { color: var(--sj-text-3); font: 9px var(--sj-font-data); }
+.gantt-bar-route i { color: var(--sj-text-3); font-style: normal; }
+.gantt-bar-status { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; }
+.gantt-current-time { position: absolute; z-index: 5; top: 64px; bottom: 0; width: 1px; pointer-events: none; background: var(--sj-red); }
+.gantt-current-time i { position: absolute; top: var(--sj-space-1); left: 4px; padding: 2px var(--sj-space-1); border-radius: var(--sj-radius-tag); color: var(--sj-canvas); background: var(--sj-red); font: 750 8px var(--sj-font-data); font-style: normal; white-space: nowrap; }
+.gantt-legend { display: flex; min-height: 42px; padding: 0 var(--sj-space-3); align-items: center; gap: var(--sj-space-4); border-top: 1px solid var(--sj-border); color: var(--sj-text-2); background: var(--sj-surface-1); font-size: 10px; }
+.gantt-legend > span { display: inline-flex; align-items: center; gap: var(--sj-space-1); }
+.gantt-legend > span i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.gantt-legend small { margin-left: auto; color: var(--sj-text-3); font: 9px var(--sj-font-data); }
 .calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 1px; overflow: hidden; border: 1px solid #e1e6eb; border-radius: 12px; background: #e1e6eb; }
 .calendar-day { min-height: 138px; padding: 10px; background: #fff; }
 .calendar-day header { display: flex; justify-content: space-between; margin-bottom: 10px; color: #5b6677; }
@@ -998,8 +1260,8 @@ onBeforeUnmount(() => {
 .dialog-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
 .edit-flight-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
 .edit-flight-form :deep(.el-form-item__label) { color: #cfd5df; font-weight: 600; }
-@media (max-width: 1180px) { .toolbar-spacer { display: none; } .timezone-field { margin-left: 0; } .task-count { width: 100%; margin-left: 0; } }
-@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 1180px) { .toolbar-spacer { display: none; } .timezone-field { margin-left: 0; } }
+@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .gantt-layout { grid-template-columns: 128px minmax(0, 1fr); } .gantt-aircraft-column > div, .gantt-row { height: 86px; } .gantt-flight-bar { min-width: 104px; } .gantt-legend small { display: none; } }
 
 /* Mission Control Dark: opt-in operational workspace skin. */
 .flight-plan-page.sj-mission-control {
@@ -1031,17 +1293,8 @@ onBeforeUnmount(() => {
 }
 
 .sj-mission-control .plan-toolbar { gap: 0; padding: 0; border-bottom: 1px solid var(--mc-line); }
-.mission-header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 0 20px; border-bottom: 1px solid var(--mc-line); background: #080b11; }
-.mission-identity { display: flex; align-items: center; gap: 11px; }
-.mission-identity > span:last-child { display: grid; gap: 2px; }
-.mission-identity strong { color: #f8fafc; font-size: 14px; font-weight: 720; }
-.mission-identity small { color: #657086; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .14em; }
-.soc-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 8px; color: #111807; background: var(--mc-lime); box-shadow: 0 0 24px rgba(163,230,53,.16); font-size: 11px; font-weight: 900; letter-spacing: .04em; }
-.mission-status { display: flex; align-items: center; gap: 7px; color: #8a96a9; font-size: 10px; letter-spacing: .12em; }
-.mission-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--mc-lime); box-shadow: 0 0 12px rgba(163,230,53,.72); }
-
-.sj-mission-control .toolbar-main { min-height: 58px; padding: 10px 20px; align-items: center; border-bottom: 1px solid var(--mc-line); background: var(--mc-surface); }
-.sj-mission-control .toolbar-filters { min-height: 56px; padding: 9px 20px; align-items: center; border-bottom: 1px solid var(--mc-line); background: #090c12; }
+.sj-mission-control .toolbar-main { min-height: 58px; padding: 10px 20px; align-items: flex-end; border-bottom: 1px solid var(--mc-line); background: var(--mc-surface); }
+.sj-mission-control .toolbar-filters { min-height: 56px; padding: 9px 20px; align-items: flex-end; border-bottom: 1px solid var(--mc-line); background: #090c12; }
 .sj-mission-control .view-switch { height: 36px; border-color: #283247; border-radius: 7px; background: #111722; }
 .sj-mission-control .view-switch :deep(.el-button) { min-height: 30px; color: #7d899d; font-size: 12px; }
 .sj-mission-control .view-switch :deep(.el-button.active) { color: #fff; background: #26344a; box-shadow: inset 0 0 0 1px rgba(85,168,255,.38), 0 0 16px rgba(85,168,255,.08); }
@@ -1069,29 +1322,13 @@ onBeforeUnmount(() => {
 .sj-mission-control .toolbar-filters label > span { padding-left: 1px; color: #657086; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
 .sj-mission-control .timezone-field { width: 240px; }
 .sj-mission-control .toolbar-filters label { width: 165px; }
+.sj-mission-control .toolbar-filters .timezone-field { width: 240px; }
 .sj-mission-control .add-button { min-height: 36px; border-color: var(--mc-lime); color: #101607; background: var(--mc-lime); box-shadow: 0 0 20px rgba(163,230,53,.12); font-weight: 750; }
 .sj-mission-control .add-button:hover,
 .sj-mission-control .add-button:focus-visible { border-color: #b8f35c; color: #071006; background: #b8f35c; }
-.sj-mission-control .task-count { color: #68758a; font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; }
-.sj-mission-control .task-count strong { color: #e8eef8; }
-
-.operations-strip { display: flex; min-height: 62px; padding: 0 20px; align-items: stretch; background: #070a10; }
-.operation-metric { display: grid; min-width: 146px; padding: 11px 22px 10px 0; margin-right: 22px; grid-template-columns: 9px auto; grid-template-rows: auto auto; column-gap: 9px; align-content: center; border-right: 1px solid #1c2330; }
-.operation-metric > i { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: #657086; }
-.operation-metric > strong { color: #f8fafc; font-family: "SFMono-Regular", Consolas, monospace; font-size: 18px; line-height: 1; }
-.operation-metric > span { grid-column: 2; margin-top: 5px; color: #657086; font-size: 9px; letter-spacing: .04em; }
-.operation-metric > i.tone-blue { background: var(--mc-blue); box-shadow: 0 0 9px rgba(85,168,255,.65); }
-.operation-metric > i.tone-red,
-.operation-metric > i.tone-coral { background: var(--mc-red); box-shadow: 0 0 9px rgba(255,102,92,.56); }
-.operation-metric > i.tone-amber { background: var(--mc-amber); box-shadow: 0 0 9px rgba(245,185,66,.55); }
-.operation-metric > i.tone-lime { background: var(--mc-lime); box-shadow: 0 0 9px rgba(163,230,53,.62); }
-.type-filters { display: flex; align-items: center; gap: 7px; margin-left: auto; }
-.type-filters button { min-width: 46px; height: 29px; border: 1px solid #252d3c; border-radius: 5px; color: #758197; background: #0c1018; font: 10px "SFMono-Regular", Consolas, monospace; cursor: pointer; }
-.type-filters button:hover,
-.type-filters button.active { border-color: #56647b; color: #f4f7fb; background: #161c27; }
-
 .sj-mission-control .timeline-panel,
-.sj-mission-control .alternative-panel { margin-top: 0; padding: 0; }
+.sj-mission-control .alternative-panel,
+.sj-mission-control .gantt-panel { margin-top: 0; padding: 0; border: 0; border-radius: 0; background: var(--sj-canvas); box-shadow: none; }
 .sj-mission-control .timeline-sticky-header { padding: 0; background: #0a0d14; }
 .sj-mission-control .timeline-header-viewport { border: 0; border-radius: 0; background: #0a0d14; }
 .sj-mission-control .timeline-header { height: 64px; border-bottom-color: var(--mc-line); background: #0a0d14; }
@@ -1102,7 +1339,7 @@ onBeforeUnmount(() => {
 .sj-mission-control .day-head.today { border: 0; border-right: 1px solid #2b4630; border-radius: 0; background: #152118; box-shadow: inset 0 -2px var(--mc-lime); }
 .sj-mission-control .day-head.today span { color: var(--mc-lime); }
 .sj-mission-control .timeline-scroll { border: 0; border-radius: 0; background: var(--mc-canvas); scrollbar-color: #38445b #0a0d14; }
-.sj-mission-control .timeline-body { height: clamp(500px, calc(100dvh - 305px), 680px); }
+.sj-mission-control .timeline-body { height: clamp(500px, calc(100dvh - 243px), 742px); }
 .sj-mission-control .day-column,
 .sj-mission-control .day-column:nth-child(even) { border-right-color: var(--mc-line); background-color: var(--mc-canvas); background-image: linear-gradient(90deg, rgba(31,39,53,.2) 1px, transparent 1px); background-size: 25% 100%; }
 .sj-mission-control .day-column:nth-child(even) { background-color: #090b11; }
@@ -1150,23 +1387,14 @@ onBeforeUnmount(() => {
 .sj-mission-control .list-panel :deep(.el-table__inner-wrapper::before) { background: #1f2633; }
 .sj-mission-control .list-panel :deep(.el-button.is-link) { color: var(--mc-blue); }
 
-@media (max-width: 1180px) {
-  .operations-strip { overflow-x: auto; }
-  .operation-metric { min-width: 132px; }
-  .type-filters { padding-left: 8px; }
-}
-
 @media (max-width: 760px) {
   .flight-plan-page.sj-mission-control { padding: 0; }
-  .mission-header { padding-inline: 12px; }
-  .mission-status { display: none; }
   .sj-mission-control .toolbar-main,
   .sj-mission-control .toolbar-filters { padding: 10px 12px; }
+  .sj-mission-control .toolbar-filters .timezone-field { width: 100%; }
   .sj-mission-control .plan-toolbar,
   .sj-mission-control .timeline-panel,
   .sj-mission-control .alternative-panel { padding: 0; border-radius: 0; }
-  .operations-strip { padding-inline: 12px; }
-  .operation-metric { min-width: 124px; }
   .sj-mission-control .flight-card-todos { display: grid; }
   .sj-mission-control .timeline-body { height: 610px; }
 }

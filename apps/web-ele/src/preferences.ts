@@ -13,4 +13,7 @@ export const overridesPreferences = defineOverridesPreferences({
     enableRefreshToken: false,
     name: import.meta.env.VITE_APP_TITLE,
   },
+  navigation: {
+    accordion: false,
+  },
 });

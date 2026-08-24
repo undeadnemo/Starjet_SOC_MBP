@@ -5,11 +5,21 @@ const routes: RouteRecordRaw[] = [
     meta: {
       icon: 'lucide:plane',
       order: 1,
-      title: '航班计划',
+      title: '航班管理',
     },
     name: 'Operations',
     path: '/operations',
     children: [
+      {
+        name: 'TripManagement',
+        path: '/operations/trips',
+        component: () =>
+          import('#/views/operations/trip-management/index.vue'),
+        meta: {
+          icon: 'lucide:route',
+          title: '行程管理',
+        },
+      },
       {
         name: 'FlightPlan',
         path: '/operations/flight-plan',
@@ -18,6 +28,26 @@ const routes: RouteRecordRaw[] = [
           affixTab: true,
           icon: 'lucide:calendar-range',
           title: '航班计划',
+        },
+      },
+      {
+        name: 'FlightRelease',
+        path: '/operations/flight-release',
+        component: () =>
+          import('#/views/operations/flight-release/index.vue'),
+        meta: {
+          icon: 'lucide:badge-check',
+          title: '飞行放行',
+        },
+      },
+      {
+        name: 'ServiceProgress',
+        path: '/operations/service-progress',
+        component: () =>
+          import('#/views/operations/service-progress/index.vue'),
+        meta: {
+          icon: 'lucide:list-checks',
+          title: '保障进程',
         },
       },
     ],

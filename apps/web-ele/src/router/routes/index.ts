@@ -6,6 +6,17 @@ import { coreRoutes, fallbackNotFoundRoute } from './core';
 
 const protectedRoutes: RouteRecordRaw[] = [
   {
+    name: 'TripDetail',
+    path: '/operations/trip-detail/:tripId?',
+    component: () => import('#/views/operations/trip-detail/index.vue'),
+    meta: {
+      activePath: '/operations/trips',
+      hideInMenu: true,
+      icon: 'lucide:route',
+      title: '行程详情',
+    },
+  },
+  {
     name: 'FlightDetail',
     path: '/operations/flight-detail/:flightId?',
     component: () =>

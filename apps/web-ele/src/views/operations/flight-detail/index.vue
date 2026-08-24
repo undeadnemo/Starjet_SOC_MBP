@@ -22,13 +22,15 @@ const detailUrl = computed(() => {
 
 function handleDetailMessage(event: MessageEvent) {
   if (event.origin !== window.location.origin || event.data !== 'flight-detail:back') return;
+  const fromTrip = route.query.source === 'trip';
   const routeName = route.path.startsWith('/demo/')
-    ? 'FlightPlanDemo'
+    ? fromTrip ? 'TripDetailDemo' : 'FlightPlanDemo'
     : route.path.startsWith('/preview/')
-      ? 'FlightPlanPreview'
-      : 'FlightPlan';
+      ? fromTrip ? 'TripDetailPreview' : 'FlightPlanPreview'
+      : fromTrip ? 'TripDetail' : 'FlightPlan';
   void router.push({
     name: routeName,
+    params: fromTrip ? { tripId: String(route.query.tripId || '') } : undefined,
   });
 }
 
@@ -50,7 +52,7 @@ onBeforeUnmount(() => window.removeEventListener('message', handleDetailMessage)
 .flight-detail-host {
   width: 100%;
   min-width: 0;
-  height: 100dvh;
+  height: var(--vben-content-height, 100dvh);
   min-height: 0;
   overflow: hidden;
   background: #07090e;

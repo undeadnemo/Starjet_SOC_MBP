@@ -6,12 +6,20 @@ const readiness = [
 ];
 
 const tripLegs = [
-  { dep:'ZBAA', depName:'北京首都 · PEK', depDate:'20 AUG', depLocal:'06:00', depUtc:'22:00', arr:'RJTT', arrName:'东京羽田 · HND', arrDate:'20 AUG', arrLocal:'10:20', arrUtc:'01:20', duration:'3H 20M', distance:'4,621 KM · IFR' },
-  { dep:'RJTT', depName:'东京羽田 · HND', depDate:'20 AUG', depLocal:'14:20', depUtc:'05:20', arr:'WSSS', arrName:'新加坡樟宜 · SIN', arrDate:'20 AUG', arrLocal:'20:35', arrUtc:'12:35', duration:'7H 15M', distance:'5,315 KM · IFR' },
-  { dep:'WSSS', depName:'新加坡樟宜 · SIN', depDate:'22 AUG', depLocal:'09:00', depUtc:'01:00', arr:'ZBAA', arrName:'北京首都 · PEK', arrDate:'22 AUG', arrLocal:'15:10', arrUtc:'07:10', duration:'6H 10M', distance:'4,460 KM · IFR' }
+  { dep:'ZBAA', depName:'北京首都 · PEK', depDate:'20 AUG', depLocal:'06:00', depUtc:'22:00', depBeijing:'06:00', arr:'RJTT', arrName:'东京羽田 · HND', arrDate:'20 AUG', arrLocal:'10:20', arrUtc:'01:20', arrBeijing:'09:20', duration:'3H 20M', distance:'4,621 KM · IFR' },
+  { dep:'RJTT', depName:'东京羽田 · HND', depDate:'20 AUG', depLocal:'14:20', depUtc:'05:20', depBeijing:'13:20', arr:'WSSS', arrName:'新加坡樟宜 · SIN', arrDate:'20 AUG', arrLocal:'20:35', arrUtc:'12:35', arrBeijing:'20:35', duration:'7H 15M', distance:'5,315 KM · IFR' },
+  { dep:'WSSS', depName:'新加坡樟宜 · SIN', depDate:'22 AUG', depLocal:'09:00', depUtc:'01:00', depBeijing:'09:00', arr:'ZBAA', arrName:'北京首都 · PEK', arrDate:'22 AUG', arrLocal:'15:10', arrUtc:'07:10', arrBeijing:'15:10', duration:'6H 10M', distance:'4,460 KM · IFR' }
 ];
 let activeLeg = 1;
-let showUtc = false;
+let timeBasis = 'lt';
+
+const aircraftProfiles = {
+  'B-8263': { model: 'G450', parkingAirport: 'ZSSS', parkingTime: '2026-08-22 19:51' },
+  'B-602M': { model: 'Legacy 650', parkingAirport: 'ZGSZ', parkingTime: '2026-08-22 10:40' },
+  'B-9308': { model: 'G450', parkingAirport: 'ZSPD', parkingTime: '2026-08-21 16:20' },
+  'B-9811': { model: 'G650ER', parkingAirport: 'ZBAA', parkingTime: '2026-08-22 17:10' },
+  'B-801Q': { model: 'G650ER', parkingAirport: 'ZUUU', parkingTime: '2026-08-20 12:00' },
+};
 
 const detailParams = new URLSearchParams(window.location.search);
 const timeLabel = value => value && value.length === 4 ? `${value.slice(0, 2)}:${value.slice(2)}` : value;
@@ -22,22 +30,120 @@ const dateLabel = value => {
   return year && month && day ? `${String(day).padStart(2, '0')} ${months[month - 1]}` : value;
 };
 
+const todoStatusMeta = {
+  completed: { label: '完成', className: 'completed' },
+  pending: { label: '待处理', className: 'pending' },
+  blocked: { label: '阻碍', className: 'blocked' },
+};
+
+const fallbackTodos = [
+  { content: '机务窗口 已确认', status: 'completed' },
+  { content: '加油不适用', status: 'pending' },
+];
+
+const defaultAnnouncements = [
+  { author: '张园', content: '变更日期 8.23 → 8.22', createdAt: '8.20 18:17' },
+  { author: '李悦', content: '时间提前一天至 8.21，21:41 起飞', createdAt: '8.20 21:41' },
+];
+
+const announcementKey = `starjet-flight-announcements:${detailParams.get('flightId') || 'default'}`;
+
+function readAnnouncements() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(announcementKey) || 'null');
+    return Array.isArray(saved) ? saved : defaultAnnouncements;
+  } catch {
+    return defaultAnnouncements;
+  }
+}
+
+let announcements = readAnnouncements();
+
+function renderAnnouncements() {
+  const list = document.querySelector('#announcementList');
+  document.querySelector('#announcementCount').textContent = announcements.length;
+  list.innerHTML = announcements.map((announcement) => `<article class="announcement-item">
+    <p>${escapeHtml(announcement.content)}</p>
+    <footer><span>${escapeHtml(announcement.author)}</span><time>${escapeHtml(announcement.createdAt)}</time></footer>
+  </article>`).join('');
+}
+
+function formatAnnouncementTime(date) {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${month}.${day} ${hours}:${minutes}`;
+}
+
+const escapeHtml = value => String(value)
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#039;');
+
+function parseDetailTodos() {
+  const encodedTodos = detailParams.get('todos');
+  if (!encodedTodos) return fallbackTodos;
+  try {
+    const todos = JSON.parse(encodedTodos);
+    if (!Array.isArray(todos)) return fallbackTodos;
+    return todos
+      .filter(todo => todo && typeof todo.content === 'string' && todoStatusMeta[todo.status])
+      .map(todo => ({ content: todo.content.trim(), status: todo.status }))
+      .filter(todo => todo.content);
+  } catch {
+    return fallbackTodos;
+  }
+}
+
+let detailTodos = parseDetailTodos();
+
+function renderDetailTodos() {
+  const counts = { completed: 0, pending: 0, blocked: 0 };
+  detailTodos.forEach(todo => { counts[todo.status] += 1; });
+  document.querySelector('#todoCount').textContent = detailTodos.length;
+  document.querySelector('#completedTodoCount').textContent = counts.completed;
+  document.querySelector('#pendingTodoCount').textContent = counts.pending;
+  document.querySelector('#blockedTodoCount').textContent = counts.blocked;
+  const list = document.querySelector('#detailTodoList');
+  if (!detailTodos.length) {
+    list.innerHTML = '<p class="todo-empty">当前航班暂无待办事项</p>';
+    return;
+  }
+  list.innerHTML = detailTodos.map((todo, index) => `<article class="detail-todo">
+      <input aria-label="待办内容" data-todo-content="${index}" value="${escapeHtml(todo.content)}" />
+      <div class="detail-todo-status" role="radiogroup" aria-label="待办状态：${todoStatusMeta[todo.status].label}">
+        ${Object.entries(todoStatusMeta).map(([value, status]) => `<button class="status-${status.className}${todo.status === value ? ' is-active' : ''}" data-todo-status="${value}" data-todo-index="${index}" type="button" role="radio" aria-checked="${todo.status === value}" aria-label="设为${status.label}" title="${status.label}"><i aria-hidden="true"></i></button>`).join('')}
+      </div>
+      <button class="detail-todo-delete" data-todo-delete="${index}" type="button" aria-label="删除待办：${escapeHtml(todo.content)}">×</button>
+    </article>`).join('');
+}
+
 if (detailParams.get('from') && detailParams.get('to')) {
-  const selectedLeg = tripLegs[1];
+  const flightSequence = { 'FP-208': 0, 'FP-209': 1, 'FP-211': 2 };
+  const selectedLegIndex = flightSequence[detailParams.get('flightId')] ?? 1;
+  const selectedLeg = tripLegs[selectedLegIndex];
+  activeLeg = selectedLegIndex;
   selectedLeg.dep = detailParams.get('from');
   selectedLeg.arr = detailParams.get('to');
+  selectedLeg.depName = detailParams.get('fromName') || selectedLeg.depName;
+  selectedLeg.arrName = detailParams.get('toName') || selectedLeg.arrName;
   selectedLeg.depDate = dateLabel(detailParams.get('date'));
   selectedLeg.arrDate = selectedLeg.depDate;
   selectedLeg.depLocal = timeLabel(detailParams.get('std'));
   selectedLeg.arrLocal = timeLabel(detailParams.get('sta'));
   selectedLeg.depUtc = selectedLeg.depLocal;
   selectedLeg.arrUtc = selectedLeg.arrLocal;
+  selectedLeg.depBeijing = selectedLeg.depLocal;
+  selectedLeg.arrBeijing = selectedLeg.arrLocal;
 
   const flightId = detailParams.get('flightId');
   const flightNo = detailParams.get('flightNo');
   const aircraft = detailParams.get('aircraft');
   const type = detailParams.get('type');
-  const activeLegCard = document.querySelector('.leg-card[data-leg="1"]');
+  const activeLegCard = document.querySelector(`.leg-card[data-leg="${selectedLegIndex}"]`);
   if (activeLegCard) {
     activeLegCard.querySelector('b').textContent = `${selectedLeg.dep} → ${selectedLeg.arr}`;
     activeLegCard.querySelector('span').textContent = `${selectedLeg.depDate} · ${selectedLeg.depLocal}–${selectedLeg.arrLocal}`;
@@ -45,7 +151,17 @@ if (detailParams.get('from') && detailParams.get('to')) {
   if (flightId) document.querySelector('.crumbs strong').textContent = flightId;
   if (flightNo) document.querySelector('#crumbLeg').textContent = flightNo;
   if (type) document.querySelector('.trip-type').textContent = type;
-  if (aircraft) document.querySelector('.head-meta strong').textContent = `G650ER · ${aircraft}`;
+  if (aircraft) {
+    const profile = aircraftProfiles[aircraft] || aircraftProfiles['B-8263'];
+    document.querySelector('#aircraftRegistration').textContent = aircraft;
+    document.querySelector('#aircraftModel').textContent = profile.model;
+    document.querySelector('#aircraftParkingAirport').textContent = profile.parkingAirport;
+    document.querySelector('#aircraftParkingTime').textContent = profile.parkingTime;
+  }
+  if (detailParams.get('tripId')) {
+    const summary = document.querySelector('.trip-summary small');
+    summary.textContent = summary.textContent.replace('TRIP-20260820-001', detailParams.get('tripId'));
+  }
 }
 
 function renderLeg(index) {
@@ -57,8 +173,14 @@ function renderLeg(index) {
   document.querySelector('#arrName').textContent = leg.arrName;
   document.querySelector('#flightDuration').textContent = leg.duration;
   document.querySelector('#flightDistance').textContent = leg.distance;
-  document.querySelector('#depTime').innerHTML = `${leg.depDate}&nbsp; ${showUtc ? leg.depUtc : leg.depLocal} <small>${showUtc ? 'UTC' : 'LT'}</small>`;
-  document.querySelector('#arrTime').innerHTML = `${leg.arrDate}&nbsp; ${showUtc ? leg.arrUtc : leg.arrLocal} <small>${showUtc ? 'UTC' : 'LT'}</small>`;
+  const timeFields = {
+    beijing: ['depBeijing', 'arrBeijing', '北京时间'],
+    lt: ['depLocal', 'arrLocal', 'LT'],
+    utc: ['depUtc', 'arrUtc', 'UTC'],
+  };
+  const [depField, arrField, basisLabel] = timeFields[timeBasis];
+  document.querySelector('#depTime').innerHTML = `${leg.depDate}&nbsp; ${leg[depField]} <small>${basisLabel}</small>`;
+  document.querySelector('#arrTime').innerHTML = `${leg.arrDate}&nbsp; ${leg[arrField]} <small>${basisLabel}</small>`;
   document.querySelector('#crumbLeg').textContent = `航班 ${index + 1}`;
   document.querySelector('#legNumber').textContent = index + 1;
   document.querySelectorAll('.leg-card').forEach((card, cardIndex) => {
@@ -77,35 +199,123 @@ document.querySelector('.back-btn').addEventListener('click', () => {
   else window.history.back();
 });
 
+renderDetailTodos();
+renderAnnouncements();
+
+const detailTodoList = document.querySelector('#detailTodoList');
+detailTodoList.addEventListener('input', event => {
+  const input = event.target.closest('[data-todo-content]');
+  if (!input) return;
+  const index = Number(input.dataset.todoContent);
+  if (detailTodos[index]) detailTodos[index].content = input.value;
+});
+detailTodoList.addEventListener('click', event => {
+  const statusButton = event.target.closest('[data-todo-status]');
+  if (statusButton) {
+    const index = Number(statusButton.dataset.todoIndex);
+    if (detailTodos[index] && todoStatusMeta[statusButton.dataset.todoStatus]) {
+      detailTodos[index].status = statusButton.dataset.todoStatus;
+      renderDetailTodos();
+    }
+    return;
+  }
+  const deleteButton = event.target.closest('[data-todo-delete]');
+  if (!deleteButton) return;
+  detailTodos.splice(Number(deleteButton.dataset.todoDelete), 1);
+  renderDetailTodos();
+});
+
+const detailTodoInput = document.querySelector('#detailTodoInput');
+const addDetailTodo = () => {
+  const content = detailTodoInput.value.trim();
+  if (!content) return;
+  detailTodos.push({ content, status: 'pending' });
+  detailTodoInput.value = '';
+  renderDetailTodos();
+  detailTodoInput.focus();
+};
+document.querySelector('#addDetailTodo').addEventListener('click', addDetailTodo);
+detailTodoInput.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' || event.shiftKey) return;
+  event.preventDefault();
+  addDetailTodo();
+});
+
+const announcementForm = document.querySelector('#announcementForm');
+document.querySelector('#addAnnouncement').addEventListener('click', () => {
+  announcementForm.hidden = false;
+  document.querySelector('#announcementContent').focus();
+});
+document.querySelector('#cancelAnnouncement').addEventListener('click', () => {
+  announcementForm.hidden = true;
+  announcementForm.reset();
+  document.querySelector('#announcementAuthor').value = '张园';
+});
+announcementForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const content = document.querySelector('#announcementContent').value.trim();
+  const author = document.querySelector('#announcementAuthor').value.trim();
+  if (!content || !author) return;
+  announcements.unshift({ author, content, createdAt: formatAnnouncementTime(new Date()) });
+  localStorage.setItem(announcementKey, JSON.stringify(announcements));
+  renderAnnouncements();
+  announcementForm.hidden = true;
+  announcementForm.reset();
+  document.querySelector('#announcementAuthor').value = author;
+  showToast('航班公告已发布');
+});
+
 document.querySelector('#readinessList').innerHTML = readiness.map(([name, pct, icon, state]) =>
   `<div class="readiness-row ${state}"><b>${name}</b><span><i style="width:${pct}%"></i></span><em>${icon}</em></div>`
 ).join('');
 
-function switchTab(id) {
+let navigationTarget = '';
+
+function setActiveTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+}
+
+function switchTab(id) {
+  navigationTarget = id;
+  setActiveTab(id);
   const target = document.querySelector(`#${id}`);
   if (target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  window.setTimeout(() => {
+    setActiveTab(id);
+  }, 700);
 }
 
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
 document.querySelectorAll('[data-jump]').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.jump)));
 
 const sectionObserver = new IntersectionObserver(entries => {
+  if (navigationTarget) return;
   const visibleSection = entries
     .filter(entry => entry.isIntersecting)
     .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
   if (!visibleSection) return;
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.tab === visibleSection.target.id);
-  });
+  setActiveTab(visibleSection.target.id);
 }, { rootMargin: '-74px 0px -58% 0px', threshold: [0.05, 0.2, 0.5] });
 
 document.querySelectorAll('.tab-panel').forEach(panel => sectionObserver.observe(panel));
 
+const resumeScrollTracking = () => { navigationTarget = ''; };
+window.addEventListener('wheel', resumeScrollTracking, { passive: true });
+window.addEventListener('touchstart', resumeScrollTracking, { passive: true });
+window.addEventListener('keydown', event => {
+  if (['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' '].includes(event.key)) resumeScrollTracking();
+});
+
 const timeToggle = document.querySelector('#timeToggle');
-timeToggle.addEventListener('click', () => {
-  showUtc = timeToggle.classList.toggle('utc');
-  timeToggle.innerHTML = showUtc ? '<span>LT</span> UTC' : 'LT <span>UTC</span>';
+timeToggle.addEventListener('click', event => {
+  const button = event.target.closest('[data-time-basis]');
+  if (!button) return;
+  timeBasis = button.dataset.timeBasis;
+  timeToggle.querySelectorAll('[data-time-basis]').forEach(option => {
+    const selected = option === button;
+    option.classList.toggle('active', selected);
+    option.setAttribute('aria-pressed', String(selected));
+  });
   renderLeg(activeLeg);
 });
 

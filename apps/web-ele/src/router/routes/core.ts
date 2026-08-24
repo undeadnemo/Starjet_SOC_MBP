@@ -8,9 +8,35 @@ import { $t } from '#/locales';
 const BasicLayout = () => import('#/layouts/basic.vue');
 const AuthPageLayout = () => import('#/layouts/auth.vue');
 const isPublicDemo = import.meta.env.VITE_PUBLIC_DEMO === 'true';
+const isDevelopmentPreview = import.meta.env.DEV;
 
 const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
   ? [
+      {
+        name: 'TripManagementDemo',
+        path: '/demo/trips',
+        component: () =>
+          import('#/views/operations/trip-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '行程管理 Demo',
+        },
+      },
+      {
+        name: 'TripDetailDemo',
+        path: '/demo/trip-detail/:tripId?',
+        component: () => import('#/views/operations/trip-detail/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '行程详情 Demo',
+        },
+      },
       {
         name: 'FlightPlanDemo',
         path: '/demo/flight-plan',
@@ -22,6 +48,57 @@ const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
           hideInTab: true,
           ignoreAccess: true,
           title: '航班计划 Demo',
+        },
+      },
+      {
+        name: 'FlightReleaseDemo',
+        path: '/demo/flight-release',
+        component: () =>
+          import('#/views/operations/flight-release/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '飞行放行 Demo',
+        },
+      },
+      {
+        name: 'ServiceProgressDemo',
+        path: '/demo/service-progress',
+        component: () =>
+          import('#/views/operations/service-progress/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '保障进程 Demo',
+        },
+      },
+      {
+        name: 'CrewRosterDemo',
+        path: '/demo/crew-roster',
+        component: () => import('#/views/operations/crew-roster/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '机组排班 Demo',
+        },
+      },
+      {
+        name: 'CrewInformationDemo',
+        path: '/demo/crew-info',
+        component: () =>
+          import('#/views/crew-management/crew-info/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '机组信息 Demo',
         },
       },
       {
@@ -46,8 +123,33 @@ const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
  * 使用 import.meta.env.DEV 确保生产构建不会注册免登录预览路由，
  * 正式环境仍必须通过后端菜单和角色权限访问航班计划。
  */
-const developmentPreviewRoutes: RouteRecordRaw[] = import.meta.env.DEV
+const developmentPreviewRoutes: RouteRecordRaw[] = isDevelopmentPreview
   ? [
+      {
+        name: 'TripManagementPreview',
+        path: '/preview/trips',
+        component: () =>
+          import('#/views/operations/trip-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '行程管理预览',
+        },
+      },
+      {
+        name: 'TripDetailPreview',
+        path: '/preview/trip-detail/:tripId?',
+        component: () => import('#/views/operations/trip-detail/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '行程详情预览',
+        },
+      },
       {
         name: 'FlightPlanPreview',
         path: '/preview/flight-plan',
@@ -59,6 +161,57 @@ const developmentPreviewRoutes: RouteRecordRaw[] = import.meta.env.DEV
           hideInTab: true,
           ignoreAccess: true,
           title: '航班计划预览',
+        },
+      },
+      {
+        name: 'FlightReleasePreview',
+        path: '/preview/flight-release',
+        component: () =>
+          import('#/views/operations/flight-release/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '飞行放行预览',
+        },
+      },
+      {
+        name: 'ServiceProgressPreview',
+        path: '/preview/service-progress',
+        component: () =>
+          import('#/views/operations/service-progress/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '保障进程预览',
+        },
+      },
+      {
+        name: 'CrewRosterPreview',
+        path: '/preview/crew-roster',
+        component: () => import('#/views/operations/crew-roster/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '机组排班预览',
+        },
+      },
+      {
+        name: 'CrewInformationPreview',
+        path: '/preview/crew-info',
+        component: () =>
+          import('#/views/crew-management/crew-info/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '机组信息预览',
         },
       },
       {
@@ -106,8 +259,10 @@ const coreRoutes: RouteRecordRaw[] = [
     path: '/',
     redirect: isPublicDemo
       ? '/demo/flight-plan'
-      : preferences.app.defaultHomePath,
-    children: [],
+      : isDevelopmentPreview
+        ? '/preview/flight-plan'
+        : preferences.app.defaultHomePath,
+    children: [...developmentPreviewRoutes, ...publicDemoRoutes],
   },
   {
     component: AuthPageLayout,
@@ -123,6 +278,10 @@ const coreRoutes: RouteRecordRaw[] = [
         name: 'Login',
         path: 'login',
         component: () => import('#/views/_core/authentication/login.vue'),
+        beforeEnter: (to) =>
+          isDevelopmentPreview && to.query.auth !== '1'
+            ? '/preview/flight-plan'
+            : true,
         meta: {
           title: $t('page.auth.login'),
         },
@@ -163,8 +322,6 @@ const coreRoutes: RouteRecordRaw[] = [
       },
     ],
   },
-  ...developmentPreviewRoutes,
-  ...publicDemoRoutes,
 ];
 
 export { coreRoutes, fallbackNotFoundRoute };
