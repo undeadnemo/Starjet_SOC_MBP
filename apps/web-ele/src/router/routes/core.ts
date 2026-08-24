@@ -114,6 +114,32 @@ const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
           title: '航班详情 Demo',
         },
       },
+      {
+        name: 'PaymentApplicationDemo',
+        path: '/demo/payment-application',
+        component: () =>
+          import('#/views/finance/payment-application/list.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '付款申请 Demo',
+        },
+      },
+      {
+        name: 'PaymentApplicationCreateDemo',
+        path: '/demo/payment-application/create',
+        component: () =>
+          import('#/views/finance/payment-application/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '付款申请 Demo',
+        },
+      },
     ]
   : [];
 
@@ -225,6 +251,32 @@ const developmentPreviewRoutes: RouteRecordRaw[] = isDevelopmentPreview
           hideInTab: true,
           ignoreAccess: true,
           title: '航班详情预览',
+        },
+      },
+      {
+        name: 'PaymentApplicationPreview',
+        path: '/preview/payment-application',
+        component: () =>
+          import('#/views/finance/payment-application/list.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '付款申请预览',
+        },
+      },
+      {
+        name: 'PaymentApplicationCreatePreview',
+        path: '/preview/payment-application/create',
+        component: () =>
+          import('#/views/finance/payment-application/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '付款申请预览',
         },
       },
     ]

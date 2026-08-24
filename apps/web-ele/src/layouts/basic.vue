@@ -139,6 +139,18 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
     {
       children: [
         {
+          icon: 'lucide:receipt-text',
+          name: '付款申请',
+          path: `${prefix}/payment-application`,
+        },
+      ],
+      icon: 'lucide:landmark',
+      name: '财务管理',
+      path: `${prefix}/finance`,
+    },
+    {
+      children: [
+        {
           disabled: true,
           icon: 'lucide:users',
           name: '用户管理',
