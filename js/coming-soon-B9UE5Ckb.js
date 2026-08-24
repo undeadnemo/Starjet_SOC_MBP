@@ -1,1 +1,0 @@
-import{Nn as e,Pr as t,Qn as n,Tn as r}from"../jse/index-index-R7gjga-s.js";import{t as i}from"./fallback-BK-vlX2p.js";var a=e({__name:`coming-soon`,setup(e){return(e,a)=>(n(),r(t(i),{status:`coming-soon`}))}});export{a as default};
