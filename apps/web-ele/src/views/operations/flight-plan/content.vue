@@ -105,6 +105,9 @@ const requestedTimelineDays = ref(5);
 const addDialogVisible = ref(false);
 const inspectorVisible = ref(false);
 const selectedFlight = ref<FlightPlanItem>();
+const draggedTodoId = ref<string>();
+const dragOverTodoId = ref<string>();
+const todoOrderAnnouncement = ref('');
 let todoSequence = 20;
 
 const airportInfo: Record<string, AirportInfo> = {
@@ -522,6 +525,55 @@ function addTodo() {
   });
   newTodo.content = '';
   ElMessage.success('待办事项已添加');
+}
+
+function reorderTodo(todoId: string, targetIndex: number) {
+  const flight = selectedFlight.value;
+  if (!flight) return;
+  const items = flightTodos[flight.id];
+  const currentIndex = items?.findIndex((item) => item.id === todoId) ?? -1;
+  if (
+    !items
+    || currentIndex < 0
+    || targetIndex < 0
+    || targetIndex >= items.length
+    || currentIndex === targetIndex
+  ) return;
+
+  const [todo] = items.splice(currentIndex, 1);
+  if (!todo) return;
+  items.splice(targetIndex, 0, todo);
+  todoOrderAnnouncement.value = `“${todo.content}”已移动到第 ${targetIndex + 1} 项`;
+}
+
+function startTodoDrag(event: DragEvent, todo: FlightTodo) {
+  draggedTodoId.value = todo.id;
+  dragOverTodoId.value = undefined;
+  event.dataTransfer?.setData('text/plain', todo.id);
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+}
+
+function dragTodoOver(event: DragEvent, todo: FlightTodo) {
+  if (!draggedTodoId.value || draggedTodoId.value === todo.id) return;
+  dragOverTodoId.value = todo.id;
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+}
+
+function dropTodo(event: DragEvent, todo: FlightTodo) {
+  const todoId = draggedTodoId.value ?? event.dataTransfer?.getData('text/plain');
+  const targetIndex = selectedFlightTodos.value.findIndex((item) => item.id === todo.id);
+  if (todoId) reorderTodo(todoId, targetIndex);
+  finishTodoDrag();
+}
+
+function finishTodoDrag() {
+  draggedTodoId.value = undefined;
+  dragOverTodoId.value = undefined;
+}
+
+function moveTodoWithKeyboard(todo: FlightTodo, offset: number) {
+  const currentIndex = selectedFlightTodos.value.findIndex((item) => item.id === todo.id);
+  reorderTodo(todo.id, currentIndex + offset);
 }
 
 async function deleteTodo(todo: FlightTodo) {
@@ -985,8 +1037,31 @@ onBeforeUnmount(() => {
               </span>
             </div>
           </header>
+          <p class="todo-order-instructions">拖动手柄调整顺序，或在手柄上按上下方向键。</p>
+          <p class="todo-order-announcement" aria-live="polite" aria-atomic="true">{{ todoOrderAnnouncement }}</p>
           <div class="todo-list">
-            <article v-for="todo in selectedFlightTodos" :key="todo.id" class="todo-item">
+            <article
+              v-for="(todo, todoIndex) in selectedFlightTodos"
+              :key="todo.id"
+              class="todo-item"
+              :class="{
+                'is-dragging': draggedTodoId === todo.id,
+                'is-drag-over': dragOverTodoId === todo.id,
+              }"
+              @dragover.prevent="dragTodoOver($event, todo)"
+              @drop.prevent="dropTodo($event, todo)"
+            >
+              <button
+                class="todo-drag-handle"
+                type="button"
+                draggable="true"
+                :aria-label="`调整待办顺序：${todo.content}，当前第 ${todoIndex + 1} 项`"
+                title="拖动排序（也可按上下方向键）"
+                @dragstart="startTodoDrag($event, todo)"
+                @dragend="finishTodoDrag"
+                @keydown.up.prevent="moveTodoWithKeyboard(todo, -1)"
+                @keydown.down.prevent="moveTodoWithKeyboard(todo, 1)"
+              ><span aria-hidden="true">⠇</span></button>
               <ElInput v-model="todo.content" aria-label="待办内容" class="todo-content-input" />
               <div class="todo-status-lights" role="radiogroup" :aria-label="`待办状态：${getTodoStatus(todo.status).label}`">
                 <button
@@ -1495,6 +1570,17 @@ onBeforeUnmount(() => {
 .todo-section h3 { font-size: 14px; }
 
 .todo-section > header > div:first-child { display: flex; align-items: baseline; gap: var(--sj-space-2); }
+.todo-order-instructions { margin: var(--sj-space-2) 0 0; color: var(--sj-text-3); font-size: 10px; }
+.todo-order-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .todo-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sj-space-2); }
 .todo-legend span { display: flex; align-items: center; gap: var(--sj-space-1); font-size: 9px; }
 .todo-legend .todo-status-light { width: 8px; height: 8px; flex-basis: 8px; }
@@ -1504,13 +1590,32 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 52px;
   padding: var(--sj-space-2);
-  grid-template-columns: minmax(0, 1fr) auto var(--sj-control-dense);
+  grid-template-columns: var(--sj-control-dense) minmax(0, 1fr) auto var(--sj-control-dense);
   align-items: center;
   gap: var(--sj-space-2);
   border: 1px solid var(--sj-border);
   border-radius: var(--sj-radius-control);
   background: var(--sj-surface-2);
+  transition: border-color var(--sj-duration-fast), background var(--sj-duration-fast), opacity var(--sj-duration-fast);
 }
+.todo-item.is-dragging { opacity: .42; }
+.todo-item.is-drag-over { border-color: var(--sj-blue); background: var(--sj-blue-soft); }
+.todo-drag-handle {
+  display: grid;
+  width: var(--sj-control-dense);
+  height: var(--sj-control-dense);
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-text-3);
+  background: transparent;
+  cursor: grab;
+}
+.todo-drag-handle:hover { border-color: var(--sj-border-strong); color: var(--sj-text-1); background: var(--sj-surface-1); }
+.todo-drag-handle:active { cursor: grabbing; }
+.todo-drag-handle:focus-visible { border-color: var(--sj-blue); outline: 2px solid var(--sj-blue); outline-offset: 1px; }
+.todo-drag-handle span { font-size: 20px; line-height: 1; transform: rotate(90deg); }
 .todo-content-input .el-input__wrapper {
   min-height: var(--sj-control-dense);
   padding-inline: var(--sj-space-2);
@@ -1621,10 +1726,11 @@ onBeforeUnmount(() => {
 
 @media (max-width: 520px) {
   .summary-route { grid-template-columns: 1fr var(--sj-space-8) 1fr; }
-  .todo-item { grid-template-columns: minmax(0, 1fr) var(--sj-control-dense); }
-  .todo-content-input { grid-column: 1 / 3; }
-  .todo-status-lights { grid-column: 1; }
-  .todo-delete-button { grid-column: 2; grid-row: 2; }
+  .todo-item { grid-template-columns: var(--sj-control-dense) minmax(0, 1fr) var(--sj-control-dense); }
+  .todo-drag-handle { grid-column: 1; grid-row: 1; }
+  .todo-content-input { grid-column: 2 / 4; }
+  .todo-status-lights { grid-column: 2; grid-row: 2; justify-self: start; }
+  .todo-delete-button { grid-column: 3; grid-row: 2; }
   .todo-composer { grid-template-columns: 1fr; }
   .todo-composer .todo-secondary-action { min-height: var(--sj-control-default); }
 }

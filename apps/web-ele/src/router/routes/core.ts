@@ -13,6 +13,19 @@ const isDevelopmentPreview = import.meta.env.DEV;
 const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
   ? [
       {
+        name: 'OperationsWorkbenchDemo',
+        path: '/demo/workbench',
+        component: () =>
+          import('#/views/operations/workbench/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '工作台 Demo',
+        },
+      },
+      {
         name: 'TripManagementDemo',
         path: '/demo/trips',
         component: () =>
@@ -151,6 +164,19 @@ const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
  */
 const developmentPreviewRoutes: RouteRecordRaw[] = isDevelopmentPreview
   ? [
+      {
+        name: 'OperationsWorkbenchPreview',
+        path: '/preview/workbench',
+        component: () =>
+          import('#/views/operations/workbench/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '工作台预览',
+        },
+      },
       {
         name: 'TripManagementPreview',
         path: '/preview/trips',

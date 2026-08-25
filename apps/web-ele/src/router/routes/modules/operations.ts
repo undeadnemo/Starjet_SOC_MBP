@@ -11,6 +11,17 @@ const routes: RouteRecordRaw[] = [
     path: '/operations',
     children: [
       {
+        name: 'OperationsWorkbench',
+        path: '/operations/workbench',
+        component: () =>
+          import('#/views/operations/workbench/index.vue'),
+        meta: {
+          affixTab: true,
+          icon: 'lucide:gauge',
+          title: '工作台',
+        },
+      },
+      {
         name: 'TripManagement',
         path: '/operations/trips',
         component: () =>
@@ -29,6 +40,19 @@ const routes: RouteRecordRaw[] = [
           icon: 'lucide:calendar-range',
           title: '航班计划',
         },
+      },
+      {
+        alias: '/crew/crew-roster',
+        component: () => import('#/views/operations/crew-roster/index.vue'),
+        meta: {
+          badge: '5',
+          badgeType: 'normal',
+          badgeVariants: 'warning',
+          icon: 'lucide:users-round',
+          title: '机组排班',
+        },
+        name: 'CrewRoster',
+        path: '/operations/crew-roster',
       },
       {
         name: 'FlightRelease',

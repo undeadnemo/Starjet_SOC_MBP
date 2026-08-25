@@ -99,13 +99,6 @@ const filteredFlights = computed(() => flights.value.filter((flight) =>
   (airportFilter.value === '全部机场' || flight.airport === airportFilter.value) &&
   (directionFilter.value === '全部类型' || flight.direction === directionFilter.value),
 ));
-const summary = computed(() => {
-  const counts: Record<NodeStatus, number> = { completed: 0, normal: 0, pending: 0, processing: 0 };
-  filteredFlights.value.forEach((flight) => activeNodes.value.forEach((node) => {
-    counts[flight.nodeStates[node.id] || 'normal'] += 1;
-  }));
-  return counts;
-});
 
 function openConfig() {
   nodeDrafts.value = serviceNodes.value.map((node) => ({ ...node }));
@@ -190,15 +183,6 @@ function statusLabel(status: NodeStatus) {
         <button class="primary-button" type="button" @click="openConfig"><SettingsIcon />配置保障节点</button>
       </div>
     </header>
-
-    <section class="status-strip" aria-label="保障状态汇总">
-      <div class="status-summary"><strong class="sj-data">{{ filteredFlights.length }}</strong><span>当前航班</span></div>
-      <div class="status-summary completed"><i></i><strong class="sj-data">{{ summary.completed }}</strong><span>完成</span></div>
-      <div class="status-summary processing"><i></i><strong class="sj-data">{{ summary.processing }}</strong><span>处理中</span></div>
-      <div class="status-summary pending"><i></i><strong class="sj-data">{{ summary.pending }}</strong><span>待处理</span></div>
-      <div class="status-summary normal"><i></i><strong class="sj-data">{{ summary.normal }}</strong><span>未开始</span></div>
-      <div class="node-count">已启用 <b class="sj-data">{{ activeNodes.length }}</b> 个保障节点</div>
-    </section>
 
     <section class="workspace">
       <div class="table-scroll">
@@ -304,11 +288,12 @@ button { cursor: pointer; }
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--sj-space-4);
+  flex-wrap: wrap;
 }
 
-.command-filters { display: flex; min-width: 0; align-items: flex-end; gap: var(--sj-space-3); }
-.command-actions { display: flex; flex: none; align-items: center; gap: var(--sj-space-2); }
-.field { display: grid; min-width: 140px; gap: var(--sj-space-1); color: var(--sj-text-3); font-size: 11px; }
+.command-filters { display: flex; min-width: 0; align-items: flex-end; gap: var(--sj-space-3); flex: 1 1 760px; flex-wrap: wrap; }
+.command-actions { display: flex; margin-left: auto; flex: none; align-items: center; gap: var(--sj-space-2); }
+.field { display: grid; min-width: 140px; gap: var(--sj-space-1); color: var(--sj-text-3); font-size: 11px; flex: 1 1 140px; }
 .field.date-field { min-width: 148px; }
 .field.compact-field { min-width: 168px; }
 .field select, .field input, .config-row input {
@@ -382,8 +367,8 @@ button { cursor: pointer; }
 .drawer-footer { display: flex; min-height: 72px; padding: var(--sj-space-4) var(--sj-space-5); border-top: 1px solid var(--sj-border); align-items: center; justify-content: flex-end; gap: var(--sj-space-2); }
 
 @media (max-width: 1280px) {
-  .command-bar { align-items: stretch; flex-direction: column; }
-  .command-filters { overflow-x: auto; }
+  .command-bar { align-items: flex-end; }
+  .command-filters { flex-basis: 100%; }
   .command-actions { justify-content: flex-end; }
   .status-strip { grid-template-columns: repeat(5, minmax(110px, 1fr)); }
   .node-count { display: none; }

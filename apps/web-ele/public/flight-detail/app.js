@@ -6,9 +6,9 @@ const readiness = [
 ];
 
 const tripLegs = [
-  { dep:'ZBAA', depName:'北京首都 · PEK', depDate:'20 AUG', depLocal:'06:00', depUtc:'22:00', depBeijing:'06:00', arr:'RJTT', arrName:'东京羽田 · HND', arrDate:'20 AUG', arrLocal:'10:20', arrUtc:'01:20', arrBeijing:'09:20', duration:'3H 20M', distance:'4,621 KM · IFR' },
-  { dep:'RJTT', depName:'东京羽田 · HND', depDate:'20 AUG', depLocal:'14:20', depUtc:'05:20', depBeijing:'13:20', arr:'WSSS', arrName:'新加坡樟宜 · SIN', arrDate:'20 AUG', arrLocal:'20:35', arrUtc:'12:35', arrBeijing:'20:35', duration:'7H 15M', distance:'5,315 KM · IFR' },
-  { dep:'WSSS', depName:'新加坡樟宜 · SIN', depDate:'22 AUG', depLocal:'09:00', depUtc:'01:00', depBeijing:'09:00', arr:'ZBAA', arrName:'北京首都 · PEK', arrDate:'22 AUG', arrLocal:'15:10', arrUtc:'07:10', arrBeijing:'15:10', duration:'6H 10M', distance:'4,460 KM · IFR' }
+  { dep:'ZBAA', depName:'北京首都 · PEK', depDate:'20 AUG', depIso:'2026-08-20', depLocal:'06:00', depUtc:'22:00', depBeijing:'06:00', arr:'RJTT', arrName:'东京羽田 · HND', arrDate:'20 AUG', arrIso:'2026-08-20', arrLocal:'10:20', arrUtc:'01:20', arrBeijing:'09:20', duration:'3H 20M', distance:'4,621 KM · IFR', taskType:'CHARTER', aircraft:'B-8263' },
+  { dep:'RJTT', depName:'东京羽田 · HND', depDate:'20 AUG', depIso:'2026-08-20', depLocal:'14:20', depUtc:'05:20', depBeijing:'13:20', arr:'WSSS', arrName:'新加坡樟宜 · SIN', arrDate:'20 AUG', arrIso:'2026-08-20', arrLocal:'20:35', arrUtc:'12:35', arrBeijing:'20:35', duration:'7H 15M', distance:'5,315 KM · IFR', taskType:'CHARTER', aircraft:'B-8263' },
+  { dep:'WSSS', depName:'新加坡樟宜 · SIN', depDate:'22 AUG', depIso:'2026-08-22', depLocal:'09:00', depUtc:'01:00', depBeijing:'09:00', arr:'ZBAA', arrName:'北京首都 · PEK', arrDate:'22 AUG', arrIso:'2026-08-22', arrLocal:'15:10', arrUtc:'07:10', arrBeijing:'15:10', duration:'6H 10M', distance:'4,460 KM · IFR', taskType:'FERRY', aircraft:'B-9811' }
 ];
 let activeLeg = 1;
 let timeBasis = 'lt';
@@ -19,6 +19,18 @@ const aircraftProfiles = {
   'B-9308': { model: 'G450', parkingAirport: 'ZSPD', parkingTime: '2026-08-21 16:20' },
   'B-9811': { model: 'G650ER', parkingAirport: 'ZBAA', parkingTime: '2026-08-22 17:10' },
   'B-801Q': { model: 'G650ER', parkingAirport: 'ZUUU', parkingTime: '2026-08-20 12:00' },
+};
+
+const airportProfiles = {
+  RJTT: '东京羽田 · HND',
+  VHHH: '香港国际 · HKG',
+  WSSS: '新加坡樟宜 · SIN',
+  ZBAA: '北京首都 · PEK',
+  ZGGG: '广州白云 · CAN',
+  ZGSZ: '深圳宝安 · SZX',
+  ZSPD: '上海浦东 · PVG',
+  ZSSS: '上海虹桥 · SHA',
+  ZUUU: '成都双流 · CTU',
 };
 
 const detailParams = new URLSearchParams(window.location.search);
@@ -128,8 +140,10 @@ if (detailParams.get('from') && detailParams.get('to')) {
   activeLeg = selectedLegIndex;
   selectedLeg.dep = detailParams.get('from');
   selectedLeg.arr = detailParams.get('to');
-  selectedLeg.depName = detailParams.get('fromName') || selectedLeg.depName;
-  selectedLeg.arrName = detailParams.get('toName') || selectedLeg.arrName;
+  selectedLeg.depName = detailParams.get('fromName') || airportProfiles[selectedLeg.dep] || `${selectedLeg.dep} 机场`;
+  selectedLeg.arrName = detailParams.get('toName') || airportProfiles[selectedLeg.arr] || `${selectedLeg.arr} 机场`;
+  selectedLeg.depIso = detailParams.get('date') || selectedLeg.depIso;
+  selectedLeg.arrIso = selectedLeg.depIso;
   selectedLeg.depDate = dateLabel(detailParams.get('date'));
   selectedLeg.arrDate = selectedLeg.depDate;
   selectedLeg.depLocal = timeLabel(detailParams.get('std'));
@@ -143,6 +157,8 @@ if (detailParams.get('from') && detailParams.get('to')) {
   const flightNo = detailParams.get('flightNo');
   const aircraft = detailParams.get('aircraft');
   const type = detailParams.get('type');
+  if (type) selectedLeg.taskType = type.toUpperCase();
+  if (aircraft && aircraftProfiles[aircraft]) selectedLeg.aircraft = aircraft;
   const activeLegCard = document.querySelector(`.leg-card[data-leg="${selectedLegIndex}"]`);
   if (activeLegCard) {
     activeLegCard.querySelector('b').textContent = `${selectedLeg.dep} → ${selectedLeg.arr}`;
@@ -150,18 +166,32 @@ if (detailParams.get('from') && detailParams.get('to')) {
   }
   if (flightId) document.querySelector('.crumbs strong').textContent = flightId;
   if (flightNo) document.querySelector('#crumbLeg').textContent = flightNo;
-  if (type) document.querySelector('.trip-type').textContent = type;
-  if (aircraft) {
-    const profile = aircraftProfiles[aircraft] || aircraftProfiles['B-8263'];
-    document.querySelector('#aircraftRegistration').textContent = aircraft;
-    document.querySelector('#aircraftModel').textContent = profile.model;
-    document.querySelector('#aircraftParkingAirport').textContent = profile.parkingAirport;
-    document.querySelector('#aircraftParkingTime').textContent = profile.parkingTime;
-  }
   if (detailParams.get('tripId')) {
     const summary = document.querySelector('.trip-summary small');
     summary.textContent = summary.textContent.replace('TRIP-20260820-001', detailParams.get('tripId'));
   }
+}
+
+const flightEditKey = `starjet-flight-edits:${detailParams.get('flightId') || 'default'}`;
+let savedFlightEdits = {};
+try {
+  savedFlightEdits = JSON.parse(localStorage.getItem(flightEditKey) || '{}') || {};
+} catch {
+  savedFlightEdits = {};
+}
+Object.entries(savedFlightEdits).forEach(([index, edit]) => {
+  if (tripLegs[Number(index)] && edit && typeof edit === 'object') Object.assign(tripLegs[Number(index)], edit);
+});
+
+function renderAircraft(registration) {
+  const profile = aircraftProfiles[registration] || aircraftProfiles['B-8263'];
+  document.querySelector('#aircraftRegistration').textContent = registration;
+  document.querySelector('#aircraftModel').textContent = profile.model;
+  document.querySelector('#aircraftParkingAirport').textContent = profile.parkingAirport;
+  document.querySelector('#aircraftParkingTime').textContent = profile.parkingTime;
+  document.querySelector('#aircraftDetailRegistration').textContent = registration;
+  document.querySelector('#aircraftDetailModel').textContent = profile.model;
+  document.querySelector('#overviewAircraft').textContent = `${registration} · ${profile.model}`;
 }
 
 function renderLeg(index) {
@@ -173,6 +203,14 @@ function renderLeg(index) {
   document.querySelector('#arrName').textContent = leg.arrName;
   document.querySelector('#flightDuration').textContent = leg.duration;
   document.querySelector('#flightDistance').textContent = leg.distance;
+  document.querySelector('.trip-type').textContent = leg.taskType;
+  document.querySelector('#flightTaskType').textContent = leg.taskType;
+  document.querySelector('#plannedRoute').textContent = `${leg.dep} → ${leg.arr}`;
+  document.querySelector('#timelineDepTime').textContent = leg.depLocal;
+  document.querySelector('#timelineArrTime').textContent = leg.arrLocal;
+  document.querySelector('#serviceDepartureAirport').textContent = `${leg.dep} · ${leg.depName.split(' · ')[0]}`;
+  document.querySelector('#serviceArrivalAirport').textContent = `${leg.arr} · ${leg.arrName.split(' · ')[0]}`;
+  renderAircraft(leg.aircraft);
   const timeFields = {
     beijing: ['depBeijing', 'arrBeijing', '北京时间'],
     lt: ['depLocal', 'arrLocal', 'LT'],
@@ -184,6 +222,9 @@ function renderLeg(index) {
   document.querySelector('#crumbLeg').textContent = `航班 ${index + 1}`;
   document.querySelector('#legNumber').textContent = index + 1;
   document.querySelectorAll('.leg-card').forEach((card, cardIndex) => {
+    const cardLeg = tripLegs[cardIndex];
+    card.querySelector('b').textContent = `${cardLeg.dep} → ${cardLeg.arr}`;
+    card.querySelector('span').textContent = `${cardLeg.depDate} · ${cardLeg.depLocal}–${cardLeg.arrLocal}`;
     card.classList.toggle('active', cardIndex === index);
     if (cardIndex === index) card.setAttribute('aria-current', 'true'); else card.removeAttribute('aria-current');
   });
@@ -321,6 +362,105 @@ timeToggle.addEventListener('click', event => {
 
 renderLeg(activeLeg);
 
+const flightEditDialog = document.querySelector('#flightEditDialog');
+const flightEditForm = document.querySelector('#flightEditForm');
+const flightEditError = document.querySelector('#flightEditError');
+
+function showFlightEditError(message = '') {
+  flightEditError.textContent = message;
+  flightEditError.hidden = !message;
+}
+
+function openFlightEdit() {
+  const leg = tripLegs[activeLeg];
+  document.querySelector('#editDeparture').value = leg.dep;
+  document.querySelector('#editArrival').value = leg.arr;
+  document.querySelector('#editDepartureDate').value = leg.depIso;
+  document.querySelector('#editDepartureTime').value = leg.depLocal;
+  document.querySelector('#editArrivalDate').value = leg.arrIso;
+  document.querySelector('#editArrivalTime').value = leg.arrLocal;
+  document.querySelector('#editTaskType').value = leg.taskType;
+  document.querySelector('#editAircraft').value = leg.aircraft;
+  showFlightEditError();
+  flightEditDialog.showModal();
+  document.querySelector('#editDeparture').focus();
+}
+
+function closeFlightEdit() {
+  showFlightEditError();
+  flightEditDialog.close();
+}
+
+function calculateDuration(departureDate, departureTime, arrivalDate, arrivalTime) {
+  const departure = new Date(`${departureDate}T${departureTime}:00`);
+  const arrival = new Date(`${arrivalDate}T${arrivalTime}:00`);
+  const minutes = Math.round((arrival.getTime() - departure.getTime()) / 60000);
+  if (!Number.isFinite(minutes) || minutes <= 0) return null;
+  return `${Math.floor(minutes / 60)}H ${String(minutes % 60).padStart(2, '0')}M`;
+}
+
+flightEditForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (!flightEditForm.reportValidity()) return;
+  const departure = document.querySelector('#editDeparture').value.trim().toUpperCase();
+  const arrival = document.querySelector('#editArrival').value.trim().toUpperCase();
+  const departureDate = document.querySelector('#editDepartureDate').value;
+  const departureTime = document.querySelector('#editDepartureTime').value;
+  const arrivalDate = document.querySelector('#editArrivalDate').value;
+  const arrivalTime = document.querySelector('#editArrivalTime').value;
+  if (!/^[A-Z]{4}$/.test(departure) || !/^[A-Z]{4}$/.test(arrival)) {
+    showFlightEditError('起降机场请输入四位 ICAO 代码');
+    return;
+  }
+  if (departure === arrival) {
+    showFlightEditError('起飞机场和到达机场不能相同');
+    return;
+  }
+  const duration = calculateDuration(departureDate, departureTime, arrivalDate, arrivalTime);
+  if (!duration) {
+    showFlightEditError('到达日期时间必须晚于起飞日期时间');
+    return;
+  }
+  const taskType = document.querySelector('#editTaskType').value;
+  const aircraft = document.querySelector('#editAircraft').value;
+  const leg = tripLegs[activeLeg];
+  Object.assign(leg, {
+    dep: departure,
+    depName: airportProfiles[departure] || `${departure} 机场`,
+    depDate: dateLabel(departureDate),
+    depIso: departureDate,
+    depLocal: departureTime,
+    depUtc: departureTime,
+    depBeijing: departureTime,
+    arr: arrival,
+    arrName: airportProfiles[arrival] || `${arrival} 机场`,
+    arrDate: dateLabel(arrivalDate),
+    arrIso: arrivalDate,
+    arrLocal: arrivalTime,
+    arrUtc: arrivalTime,
+    arrBeijing: arrivalTime,
+    duration,
+    taskType,
+    aircraft,
+  });
+  savedFlightEdits[activeLeg] = {
+    dep: leg.dep, depName: leg.depName, depDate: leg.depDate, depIso: leg.depIso, depLocal: leg.depLocal, depUtc: leg.depUtc, depBeijing: leg.depBeijing,
+    arr: leg.arr, arrName: leg.arrName, arrDate: leg.arrDate, arrIso: leg.arrIso, arrLocal: leg.arrLocal, arrUtc: leg.arrUtc, arrBeijing: leg.arrBeijing,
+    duration: leg.duration, taskType: leg.taskType, aircraft: leg.aircraft,
+  };
+  localStorage.setItem(flightEditKey, JSON.stringify(savedFlightEdits));
+  renderLeg(activeLeg);
+  closeFlightEdit();
+  showToast('航段信息已更新');
+});
+
+document.querySelectorAll('#editFlightHead, #editFlightSection').forEach(button => button.addEventListener('click', openFlightEdit));
+document.querySelector('#closeFlightEdit').addEventListener('click', closeFlightEdit);
+document.querySelector('#cancelFlightEdit').addEventListener('click', closeFlightEdit);
+document.querySelectorAll('#editDeparture, #editArrival').forEach(input => input.addEventListener('input', () => {
+  input.value = input.value.toUpperCase();
+  showFlightEditError();
+}));
 const exportMaterials = {
   'crew-trip-sheet': '机组行程清单',
   'passenger-itinerary': '乘客行程清单',

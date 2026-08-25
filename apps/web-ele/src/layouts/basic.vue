@@ -92,6 +92,11 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
     {
       children: [
         {
+          icon: 'lucide:gauge',
+          name: '工作台',
+          path: `${prefix}/workbench`,
+        },
+        {
           icon: 'lucide:route',
           name: '行程管理',
           path: `${prefix}/trips`,
@@ -100,6 +105,14 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
           icon: 'lucide:calendar-range',
           name: '航班计划',
           path: `${prefix}/flight-plan`,
+        },
+        {
+          badge: String(crewUnassignedCount.value),
+          badgeType: 'normal',
+          badgeVariants: 'warning',
+          icon: 'lucide:users-round',
+          name: '机组排班',
+          path: `${prefix}/crew-roster`,
         },
         {
           icon: 'lucide:badge-check',
@@ -119,21 +132,13 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
     {
       children: [
         {
-          badge: String(crewUnassignedCount.value),
-          badgeType: 'normal',
-          badgeVariants: 'warning',
-          icon: 'lucide:users-round',
-          name: '机组排班',
-          path: `${prefix}/crew-roster`,
-        },
-        {
           icon: 'lucide:id-card',
           name: '机组信息',
           path: `${prefix}/crew-info`,
         },
       ],
       icon: 'lucide:contact-round',
-      name: '机组管理',
+      name: '信息管理',
       path: `${prefix}/crew`,
     },
     {
