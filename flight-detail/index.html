@@ -42,11 +42,13 @@
       <section class="flight-head">
         <div class="flight-main">
           <div class="flight-head-tools">
-            <span class="trip-type">CHARTER</span>
-            <div class="time-toggle" id="timeToggle" role="group" aria-label="时间基准">
-              <button class="active" data-time-basis="lt" type="button" aria-pressed="true">LT</button>
-              <button data-time-basis="utc" type="button" aria-pressed="false">UTC</button>
-              <button data-time-basis="beijing" type="button" aria-pressed="false">北京时间</button>
+            <div class="flight-type-actions"><span class="trip-type">CHARTER</span><button class="edit-flight-btn" id="editFlightHead" type="button">编辑航段</button></div>
+            <div class="flight-head-actions">
+              <div class="time-toggle" id="timeToggle" role="group" aria-label="时间基准">
+                <button class="active" data-time-basis="lt" type="button" aria-pressed="true">LT</button>
+                <button data-time-basis="utc" type="button" aria-pressed="false">UTC</button>
+                <button data-time-basis="beijing" type="button" aria-pressed="false">北京时间</button>
+              </div>
             </div>
           </div>
           <div class="route-row">
@@ -87,8 +89,8 @@
                 <div class="track-base"><span style="left:10%"></span><span style="left:32%"></span><span style="left:68%"></span><span style="left:90%"></span></div>
                 <div class="milestone" style="left:10%"><b>08:30</b><span>机组报到</span></div>
                 <div class="milestone" style="left:32%"><b>09:15</b><span>旅客抵达</span></div>
-                <div class="milestone main" style="left:68%"><b>10:00</b><span>计划起飞 STD</span></div>
-                <div class="milestone" style="left:90%"><b>14:20</b><span>计划到达 STA</span></div>
+                <div class="milestone main" style="left:68%"><b id="timelineDepTime">10:00</b><span>计划起飞 STD</span></div>
+                <div class="milestone" style="left:90%"><b id="timelineArrTime">14:20</b><span>计划到达 STA</span></div>
               </div>
               <div class="slot-strip"><span>SLOT</span><b>09:50—10:10</b><small>起飞窗口剩余 01:18:42</small></div>
             </div>
@@ -107,15 +109,15 @@
             </div>
 
             <div class="snapshot-grid">
-              <article class="mini-card"><div class="mini-head"><span class="plane-icon">✈</span><div><small>AIRCRAFT</small><h3>B-XXXX · G650ER</h3></div><b class="ok">可用</b></div><div class="mini-stats"><p><span>当前位置</span><b>ZBAA 北京</b></p><p><span>下次检修</span><b>27 AUG · 18 FH</b></p><p class="warning"><span>运行限制</span><b>APU INOPERATIVE</b></p></div></article>
+              <article class="mini-card"><div class="mini-head"><span class="plane-icon">✈</span><div><small>AIRCRAFT</small><h3 id="overviewAircraft">B-XXXX · G650ER</h3></div><b class="ok">可用</b></div><div class="mini-stats"><p><span>当前位置</span><b>ZBAA 北京</b></p><p><span>下次检修</span><b>27 AUG · 18 FH</b></p><p class="warning"><span>运行限制</span><b>APU INOPERATIVE</b></p></div></article>
               <article class="mini-card"><div class="mini-head"><span class="crew-icon">♙</span><div><small>CREW</small><h3>3 名机组已确认</h3></div><b class="ok">合法</b></div><div class="crew-line"><span>PIC</span><b>张伟</b><em>10:45 / 13:00</em><i>余 2:15</i></div><div class="crew-line"><span>SIC</span><b>李明</b><em>09:50 / 13:00</em><i>余 3:10</i></div><div class="crew-line"><span>CC</span><b>王敏</b><em>09:50 / 13:00</em><i>余 3:10</i></div></article>
             </div>
           </section>
 
           <section class="tab-panel" id="flight">
-            <div class="section-heading"><div><h2>航班与飞机</h2></div><button class="primary-btn">编辑航班</button></div>
-            <div class="card details-grid"><div><span>Trip ID</span><b>TRIP-20260820-001</b></div><div><span>Leg ID</span><b>LEG-001</b></div><div><span>航班号</span><b>SJ6801</b></div><div><span>呼号</span><b>STARJET 6801</b></div><div><span>任务类型</span><b>Charter</b></div><div><span>飞行规则</span><b>IFR</b></div><div><span>备降机场</span><b>RJAA · 成田</b></div><div><span>计划航路</span><b>ZBAA → RKRR → RJTT</b></div></div>
-            <div class="card aircraft-detail"><div class="aircraft-hero"><small>AIRCRAFT</small><h2>B-XXXX</h2><p>Gulfstream G650ER</p><span class="badge green">AVAILABLE</span></div><div class="aircraft-data"><div><span>运营人</span><b>Starjet Aviation</b></div><div><span>基地</span><b>ZBAA · 北京</b></div><div><span>座位 / 行李</span><b>14 / 1,950 kg</b></div><div><span>MTOW</span><b>48,807 kg</b></div><div><span>剩余飞行小时</span><b>18 FH</b></div><div class="issue"><span>开放限制</span><b>⚠ APU INOPERATIVE</b><small>有效至 23 AUG · RJTT 需确认 GPU</small></div></div></div>
+            <div class="section-heading"><div><h2>航班与飞机</h2></div><button class="primary-btn" id="editFlightSection" type="button">编辑航段</button></div>
+            <div class="card details-grid"><div><span>Trip ID</span><b>TRIP-20260820-001</b></div><div><span>Leg ID</span><b>LEG-001</b></div><div><span>航班号</span><b>SJ6801</b></div><div><span>呼号</span><b>STARJET 6801</b></div><div><span>任务类型</span><b id="flightTaskType">CHARTER</b></div><div><span>飞行规则</span><b>IFR</b></div><div><span>备降机场</span><b>RJAA · 成田</b></div><div><span>计划航路</span><b id="plannedRoute">ZBAA → RKRR → RJTT</b></div></div>
+            <div class="card aircraft-detail"><div class="aircraft-hero"><small>AIRCRAFT</small><h2 id="aircraftDetailRegistration">B-XXXX</h2><p id="aircraftDetailModel">Gulfstream G650ER</p><span class="badge green">AVAILABLE</span></div><div class="aircraft-data"><div><span>运营人</span><b>Starjet Aviation</b></div><div><span>基地</span><b>ZBAA · 北京</b></div><div><span>座位 / 行李</span><b>14 / 1,950 kg</b></div><div><span>MTOW</span><b>48,807 kg</b></div><div><span>剩余飞行小时</span><b>18 FH</b></div><div class="issue"><span>开放限制</span><b>⚠ APU INOPERATIVE</b><small>有效至 23 AUG · RJTT 需确认 GPU</small></div></div></div>
           </section>
 
           <section class="tab-panel" id="crew">
@@ -130,7 +132,7 @@
 
           <section class="tab-panel" id="services">
             <div class="section-heading"><div><h2>地面保障</h2></div><button class="primary-btn">新增保障</button></div>
-            <div class="service-grid"><div class="card service-card"><div class="airport-tag">ZBAA · 北京</div><h3>起飞站保障</h3><div class="service-row"><span>地面代理</span><b>Starjet Base</b><em class="ok">已确认</em></div><div class="service-row"><span>停机位</span><b>Stand 609</b><em class="ok">已确认</em></div><div class="service-row"><span>GPU</span><b>已预订</b><em class="ok">已确认</em></div><div class="service-row"><span>餐食</span><b>Sky Catering</b><em class="pending">部分确认</em></div></div><div class="card service-card"><div class="airport-tag">RJTT · 东京</div><h3>到达站保障</h3><div class="service-row"><span>地面代理</span><b>Universal Aviation</b><em class="ok">已确认</em></div><div class="service-row"><span>停机位</span><b>Int'l Apron</b><em class="ok">已确认</em></div><div class="service-row"><span>CIQ</span><b>可用</b><em class="ok">已确认</em></div><div class="service-row"><span>机组交通</span><b>Local Supplier</b><em class="pending">待确认</em></div></div></div>
+            <div class="service-grid"><div class="card service-card"><div class="airport-tag" id="serviceDepartureAirport">ZBAA · 北京</div><h3>起飞站保障</h3><div class="service-row"><span>地面代理</span><b>Starjet Base</b><em class="ok">已确认</em></div><div class="service-row"><span>停机位</span><b>Stand 609</b><em class="ok">已确认</em></div><div class="service-row"><span>GPU</span><b>已预订</b><em class="ok">已确认</em></div><div class="service-row"><span>餐食</span><b>Sky Catering</b><em class="pending">部分确认</em></div></div><div class="card service-card"><div class="airport-tag" id="serviceArrivalAirport">RJTT · 东京</div><h3>到达站保障</h3><div class="service-row"><span>地面代理</span><b>Universal Aviation</b><em class="ok">已确认</em></div><div class="service-row"><span>停机位</span><b>Int'l Apron</b><em class="ok">已确认</em></div><div class="service-row"><span>CIQ</span><b>可用</b><em class="ok">已确认</em></div><div class="service-row"><span>机组交通</span><b>Local Supplier</b><em class="pending">待确认</em></div></div></div>
           </section>
 
           <section class="tab-panel" id="fuel">
@@ -198,6 +200,23 @@
     </main>
   </div>
 
+  <dialog id="flightEditDialog" aria-labelledby="flightEditTitle">
+    <form id="flightEditForm">
+      <header class="dialog-head"><h3 id="flightEditTitle">编辑航段</h3><button id="closeFlightEdit" type="button" aria-label="关闭">×</button></header>
+      <div class="flight-edit-grid">
+        <label>起飞机场<input id="editDeparture" maxlength="4" pattern="[A-Za-z]{4}" required /></label>
+        <label>到达机场<input id="editArrival" maxlength="4" pattern="[A-Za-z]{4}" required /></label>
+        <label>起飞日期<input id="editDepartureDate" type="date" required /></label>
+        <label>起飞时间（LT）<input id="editDepartureTime" type="time" required /></label>
+        <label>到达日期<input id="editArrivalDate" type="date" required /></label>
+        <label>到达时间（LT）<input id="editArrivalTime" type="time" required /></label>
+        <label>任务类型<select id="editTaskType" required><option value="CHARTER">包机 CHARTER</option><option value="PAX">载客 PAX</option><option value="FERRY">调机 FERRY</option><option value="TRAINING">训练 TRAINING</option><option value="MAINTENANCE">维修调机 MAINTENANCE</option></select></label>
+        <label>执飞飞机<select id="editAircraft" required><option value="B-8263">B-8263 · G450</option><option value="B-602M">B-602M · Legacy 650</option><option value="B-9308">B-9308 · G450</option><option value="B-9811">B-9811 · G650ER</option><option value="B-801Q">B-801Q · G650ER</option></select></label>
+      </div>
+      <p class="flight-edit-error" id="flightEditError" role="alert" hidden></p>
+      <div class="dialog-actions"><button id="cancelFlightEdit" type="button">取消</button><button class="save-flight-edit" type="submit">保存修改</button></div>
+    </form>
+  </dialog>
   <div class="toast" id="toast" role="status">物料已生成</div>
   <script src="app.js"></script>
 </body>

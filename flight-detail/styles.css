@@ -123,7 +123,9 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
   --sj-radius-tag: 4px;
   --sj-radius-control: 6px;
   --sj-radius-panel: 8px;
+  --sj-radius-overlay: 12px;
   --sj-control-default: 36px;
+  --sj-shadow-panel: var(--shadow);
   --sj-duration-fast: 120ms;
 }
 
@@ -885,4 +887,188 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
   .tabs { position: sticky; }
   .tab-panel,
   .tab-panel.active { scroll-margin-top: calc(59px + var(--sj-space-3)); }
+}
+
+/* 详情主区需要扣除右栏后再响应，避免 16 寸屏幕缩放时局部横向裁切。 */
+.detail-primary {
+  container-name: flight-detail-primary;
+  container-type: inline-size;
+}
+
+@container flight-detail-primary (max-width: 1100px) {
+  .trip-strip {
+    padding-inline: var(--sj-space-5);
+    grid-template-columns: 190px minmax(0, 1fr) 82px;
+    gap: var(--sj-space-3);
+  }
+
+  .leg-list { min-width: 0; }
+  .leg-card { min-width: 0; padding-inline: var(--sj-space-2); }
+  .leg-card b,
+  .leg-card span,
+  .leg-card small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .flight-head {
+    padding: var(--sj-space-5);
+    grid-template-columns: minmax(0, 1fr) 160px 230px;
+    gap: var(--sj-space-4);
+  }
+
+  .aircraft-summary { padding-left: var(--sj-space-4); }
+  .aircraft-photo { height: 150px; }
+
+  .tabs { padding-inline: 0; }
+  .tabs .tab {
+    min-width: 72px;
+    max-width: none;
+    padding-inline: var(--sj-space-2);
+    gap: var(--sj-space-1);
+    flex: 1 1 72px;
+  }
+}
+
+@container flight-detail-primary (max-width: 880px) {
+  .trip-strip { grid-template-columns: minmax(0, 1fr) auto; }
+  .trip-summary { grid-column: 1 / -1; }
+  .leg-list { overflow-x: auto; }
+  .leg-card { min-width: 170px; }
+
+  .flight-head { grid-template-columns: minmax(0, 1fr) minmax(220px, .55fr); }
+  .flight-main { grid-column: 1 / -1; }
+  .aircraft-summary { padding-left: 0; border-left: 0; }
+}
+
+@container flight-detail-primary (max-width: 650px) {
+  .trip-strip { display: block; }
+  .trip-summary { margin-bottom: var(--sj-space-3); }
+  .leg-pager { display: none; }
+  .flight-head { grid-template-columns: 1fr; }
+  .flight-main,
+  .aircraft-summary,
+  .aircraft-photo { grid-column: 1; }
+}
+
+/* 航段与执飞飞机编辑 */
+.flight-type-actions,
+.flight-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sj-space-2);
+}
+
+.edit-flight-btn {
+  min-height: var(--sj-control-default);
+  padding: 0 var(--sj-space-3);
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-blue);
+  background: var(--sj-surface-2);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color var(--sj-duration-fast), border-color var(--sj-duration-fast), background var(--sj-duration-fast);
+}
+
+.edit-flight-btn:hover {
+  border-color: var(--sj-blue);
+  color: var(--sj-text-1);
+  background: var(--sj-blue-soft);
+}
+
+.edit-flight-btn:focus-visible,
+#flightEditDialog button:focus-visible,
+#flightEditDialog input:focus-visible,
+#flightEditDialog select:focus-visible {
+  outline: 2px solid var(--sj-blue);
+  outline-offset: 2px;
+}
+
+#flightEditDialog {
+  width: min(700px, calc(100vw - var(--sj-space-8)));
+  max-height: calc(100vh - var(--sj-space-8));
+  overflow-y: auto;
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-overlay);
+  color: var(--sj-text-1);
+  background: var(--sj-surface-1);
+  box-shadow: var(--sj-shadow-panel);
+}
+
+#flightEditDialog::backdrop {
+  background: color-mix(in srgb, var(--sj-canvas) 82%, transparent);
+}
+
+#flightEditDialog form { padding: var(--sj-space-6); }
+#flightEditDialog .dialog-head {
+  margin: calc(var(--sj-space-6) * -1) calc(var(--sj-space-6) * -1) var(--sj-space-5);
+  padding: var(--sj-space-4) var(--sj-space-6);
+  border-bottom: 1px solid var(--sj-border);
+}
+#flightEditDialog .dialog-head h3 { color: var(--sj-text-1); font-size: 15px; }
+#flightEditDialog .dialog-head button { color: var(--sj-text-2); cursor: pointer; }
+
+.flight-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sj-space-3) var(--sj-space-4);
+}
+
+.flight-edit-grid label {
+  min-width: 0;
+  margin: 0;
+  color: var(--sj-text-2);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.flight-edit-grid input,
+.flight-edit-grid select {
+  height: var(--sj-control-default);
+  margin-top: var(--sj-space-2);
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-text-1);
+  background: var(--sj-surface-2);
+  font-family: var(--sj-font-data);
+}
+
+.flight-edit-grid input:hover,
+.flight-edit-grid select:hover { border-color: var(--sj-blue); }
+
+.flight-edit-error {
+  margin: var(--sj-space-3) 0 0;
+  padding: var(--sj-space-2) var(--sj-space-3);
+  border-left: 2px solid var(--sj-red);
+  color: var(--sj-red);
+  background: var(--sj-red-soft);
+  font-size: 10px;
+}
+
+#flightEditDialog .dialog-actions { margin-top: var(--sj-space-5); }
+#flightEditDialog .dialog-actions button {
+  min-height: var(--sj-control-default);
+  padding: 0 var(--sj-space-4);
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-text-2);
+  background: var(--sj-surface-2);
+  cursor: pointer;
+}
+#flightEditDialog .dialog-actions .save-flight-edit {
+  border-color: var(--sj-lime);
+  color: var(--sj-canvas);
+  background: var(--sj-lime);
+  font-weight: 750;
+}
+
+@media (max-width: 760px) {
+  .flight-head-tools { align-items: stretch; }
+  .flight-type-actions,
+  .flight-head-actions { justify-content: space-between; }
+  .flight-edit-grid { grid-template-columns: 1fr; }
+  #flightEditDialog form { padding: var(--sj-space-4); }
+  #flightEditDialog .dialog-head {
+    margin: calc(var(--sj-space-4) * -1) calc(var(--sj-space-4) * -1) var(--sj-space-4);
+    padding: var(--sj-space-3) var(--sj-space-4);
+  }
 }
