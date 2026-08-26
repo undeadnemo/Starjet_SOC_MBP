@@ -1,0 +1,1 @@
+import{Rr as e}from"../jse/index-index-GQVOjUbP.js";var t=(e=``)=>e.replace(/[|\\{}()[\]^$+*?.]/g,`\\$&`).replace(/-/g,`\\x2d`),n=t=>e(t);export{t as n,n as t};

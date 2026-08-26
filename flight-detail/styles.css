@@ -836,9 +836,146 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
   object-position: center;
 }
 
+/* 航班动态：按运行阶段逐步显露计划、预计与实际时间。 */
+.flight-movement {
+  display: grid;
+  grid-template-columns: minmax(220px, .55fr) minmax(620px, 1.45fr);
+  align-items: stretch;
+  gap: var(--sj-space-6);
+  min-height: 116px;
+  padding: var(--sj-space-4) var(--sj-space-8);
+  border-bottom: 1px solid var(--sj-border);
+  background: var(--sj-surface-1);
+}
+
+.movement-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sj-space-4);
+  min-width: 0;
+  padding-right: var(--sj-space-6);
+  border-right: 1px solid var(--sj-border);
+}
+
+.movement-overview h2,
+.movement-time-group h3,
+.movement-overview p,
+.movement-time-group dl,
+.movement-time-group dd { margin: 0; }
+
+.movement-overview h2 {
+  color: var(--sj-text-1);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.movement-overview p {
+  max-width: 260px;
+  margin-top: var(--sj-space-2);
+  color: var(--sj-text-3);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.movement-state-block {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.movement-state-block > time {
+  display: block;
+  margin-top: var(--sj-space-2);
+  color: var(--sj-text-3);
+  font: 9px var(--sj-font-data);
+}
+
+.movement-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sj-space-2);
+  min-height: 28px;
+  padding: 0 var(--sj-space-3);
+  border: 1px solid var(--sj-blue);
+  border-radius: var(--sj-radius-tag);
+  color: var(--sj-blue);
+  background: var(--sj-blue-soft);
+  font-size: 11px;
+}
+
+.movement-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.movement-status.is-arrived {
+  border-color: var(--sj-lime);
+  color: var(--sj-lime);
+  background: var(--sj-lime-soft);
+}
+
+.movement-time-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sj-space-3);
+}
+
+.movement-time-group {
+  min-width: 0;
+  padding: var(--sj-space-3) var(--sj-space-4);
+  border: 1px solid var(--sj-border);
+  border-radius: var(--sj-radius-panel);
+  background: var(--sj-surface-2);
+}
+
+.movement-time-group h3 {
+  margin-bottom: var(--sj-space-2);
+  color: var(--sj-text-3);
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+
+.movement-time-group dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sj-space-3);
+}
+
+.movement-time-group dl > div + div {
+  padding-left: var(--sj-space-3);
+  border-left: 1px solid var(--sj-border);
+}
+
+.movement-time-group dt {
+  margin-bottom: var(--sj-space-1);
+  color: var(--sj-text-3);
+  font-size: 9px;
+}
+
+.movement-time-group time {
+  color: var(--sj-text-1);
+  font: 700 13px var(--sj-font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.movement-time-group.is-estimated { border-color: var(--sj-blue); }
+.movement-time-group.is-estimated time { color: var(--sj-blue); }
+.movement-time-group.is-actual { border-color: var(--sj-lime); }
+.movement-time-group.is-actual time { color: var(--sj-lime); }
+.movement-time-group time.is-empty { color: var(--sj-text-disabled); }
+
 @media (max-width: 1439px) {
   .flight-head {
     grid-template-columns: minmax(460px, 1fr) 190px 300px;
+    gap: var(--sj-space-5);
+    padding-inline: var(--sj-space-6);
+  }
+
+  .flight-movement {
+    grid-template-columns: minmax(200px, .45fr) minmax(570px, 1.55fr);
     gap: var(--sj-space-5);
     padding-inline: var(--sj-space-6);
   }
@@ -849,6 +986,8 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
   .flight-main { grid-column: 1 / -1; }
   .aircraft-summary { padding-left: 0; border-left: 0; }
   .aircraft-photo { height: 148px; }
+  .flight-movement { grid-template-columns: 1fr; }
+  .movement-overview { padding-right: 0; padding-bottom: var(--sj-space-3); border-right: 0; border-bottom: 1px solid var(--sj-border); }
 }
 
 @media (max-width: 760px) {
@@ -868,6 +1007,8 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
 
   .time-toggle { width: 100%; }
   .time-toggle button { flex: 1; }
+  .flight-movement { padding: var(--sj-space-4); }
+  .movement-time-groups { grid-template-columns: 1fr; }
 }
 
 /* 航班模块导航到达视口顶部后保持可见。页面由嵌入 iframe 自身滚动。 */

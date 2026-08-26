@@ -6,9 +6,27 @@ const readiness = [
 ];
 
 const tripLegs = [
-  { dep:'ZBAA', depName:'北京首都 · PEK', depDate:'20 AUG', depIso:'2026-08-20', depLocal:'06:00', depUtc:'22:00', depBeijing:'06:00', arr:'RJTT', arrName:'东京羽田 · HND', arrDate:'20 AUG', arrIso:'2026-08-20', arrLocal:'10:20', arrUtc:'01:20', arrBeijing:'09:20', duration:'3H 20M', distance:'4,621 KM · IFR', taskType:'CHARTER', aircraft:'B-8263' },
-  { dep:'RJTT', depName:'东京羽田 · HND', depDate:'20 AUG', depIso:'2026-08-20', depLocal:'14:20', depUtc:'05:20', depBeijing:'13:20', arr:'WSSS', arrName:'新加坡樟宜 · SIN', arrDate:'20 AUG', arrIso:'2026-08-20', arrLocal:'20:35', arrUtc:'12:35', arrBeijing:'20:35', duration:'7H 15M', distance:'5,315 KM · IFR', taskType:'CHARTER', aircraft:'B-8263' },
-  { dep:'WSSS', depName:'新加坡樟宜 · SIN', depDate:'22 AUG', depIso:'2026-08-22', depLocal:'09:00', depUtc:'01:00', depBeijing:'09:00', arr:'ZBAA', arrName:'北京首都 · PEK', arrDate:'22 AUG', arrIso:'2026-08-22', arrLocal:'15:10', arrUtc:'07:10', arrBeijing:'15:10', duration:'6H 10M', distance:'4,460 KM · IFR', taskType:'FERRY', aircraft:'B-9811' }
+  {
+    dep:'ZBAA', depName:'北京首都 · PEK', depDate:'20 AUG', depIso:'2026-08-20', depLocal:'06:00', depUtc:'22:00', depBeijing:'06:00',
+    arr:'RJTT', arrName:'东京羽田 · HND', arrDate:'20 AUG', arrIso:'2026-08-20', arrLocal:'10:20', arrUtc:'01:20', arrBeijing:'09:20',
+    duration:'3H 20M', distance:'4,621 KM · IFR', taskType:'CHARTER', aircraft:'B-8263', movementState:'arrived', movementUpdatedAt:'10:33:04',
+    estimatedDep:{ lt:'06:10', utc:'22:10', beijing:'06:10' }, estimatedArr:{ lt:'10:28', utc:'01:28', beijing:'09:28' },
+    actualDep:{ lt:'06:08', utc:'22:08', beijing:'06:08' }, actualArr:{ lt:'10:31', utc:'01:31', beijing:'09:31' },
+  },
+  {
+    dep:'RJTT', depName:'东京羽田 · HND', depDate:'20 AUG', depIso:'2026-08-20', depLocal:'14:20', depUtc:'05:20', depBeijing:'13:20',
+    arr:'WSSS', arrName:'新加坡樟宜 · SIN', arrDate:'20 AUG', arrIso:'2026-08-20', arrLocal:'20:35', arrUtc:'12:35', arrBeijing:'20:35',
+    duration:'7H 15M', distance:'5,315 KM · IFR', taskType:'CHARTER', aircraft:'B-8263', movementState:'departed', movementUpdatedAt:'14:39:26',
+    estimatedDep:{ lt:'14:35', utc:'05:35', beijing:'13:35' }, estimatedArr:{ lt:'20:48', utc:'12:48', beijing:'20:48' },
+    actualDep:{ lt:'14:37', utc:'05:37', beijing:'13:37' }, actualArr:null,
+  },
+  {
+    dep:'WSSS', depName:'新加坡樟宜 · SIN', depDate:'22 AUG', depIso:'2026-08-22', depLocal:'09:00', depUtc:'01:00', depBeijing:'09:00',
+    arr:'ZBAA', arrName:'北京首都 · PEK', arrDate:'22 AUG', arrIso:'2026-08-22', arrLocal:'15:10', arrUtc:'07:10', arrBeijing:'15:10',
+    duration:'6H 10M', distance:'4,460 KM · IFR', taskType:'FERRY', aircraft:'B-9811', movementState:'planned', movementUpdatedAt:'10:32:18',
+    estimatedDep:{ lt:'09:00', utc:'01:00', beijing:'09:00' }, estimatedArr:{ lt:'15:10', utc:'07:10', beijing:'15:10' },
+    actualDep:null, actualArr:null,
+  }
 ];
 let activeLeg = 1;
 let timeBasis = 'lt';
@@ -34,6 +52,12 @@ const airportProfiles = {
 };
 
 const detailParams = new URLSearchParams(window.location.search);
+const movementStateMeta = {
+  planned: { label: '计划', code: 'PLAN', summary: '航班按计划准备，尚未起飞' },
+  departed: { label: '已起飞', code: 'AIR', summary: '航班已离港，持续更新预计到达时间' },
+  arrived: { label: '已到达', code: 'ARR', summary: '航班已到达，实际起降时间已记录' },
+};
+const movementStateAliases = { plan: 'planned', planning: 'planned', airborne: 'departed', inair: 'departed', landed: 'arrived' };
 const timeLabel = value => value && value.length === 4 ? `${value.slice(0, 2)}:${value.slice(2)}` : value;
 const dateLabel = value => {
   if (!value) return '';
@@ -152,6 +176,22 @@ if (detailParams.get('from') && detailParams.get('to')) {
   selectedLeg.arrUtc = selectedLeg.arrLocal;
   selectedLeg.depBeijing = selectedLeg.depLocal;
   selectedLeg.arrBeijing = selectedLeg.arrLocal;
+  const requestedState = detailParams.get('status')?.toLowerCase();
+  selectedLeg.movementState = movementStateMeta[requestedState] ? requestedState : movementStateAliases[requestedState] || selectedLeg.movementState;
+  selectedLeg.estimatedDep = {
+    lt: timeLabel(detailParams.get('etd')) || selectedLeg.depLocal,
+    utc: timeLabel(detailParams.get('etdUtc')) || selectedLeg.depUtc,
+    beijing: timeLabel(detailParams.get('etdBeijing')) || selectedLeg.depBeijing,
+  };
+  selectedLeg.estimatedArr = {
+    lt: timeLabel(detailParams.get('eta')) || selectedLeg.arrLocal,
+    utc: timeLabel(detailParams.get('etaUtc')) || selectedLeg.arrUtc,
+    beijing: timeLabel(detailParams.get('etaBeijing')) || selectedLeg.arrBeijing,
+  };
+  const actualDeparture = timeLabel(detailParams.get('atd'));
+  const actualArrival = timeLabel(detailParams.get('ata'));
+  if (actualDeparture) selectedLeg.actualDep = { lt: actualDeparture, utc: timeLabel(detailParams.get('atdUtc')) || actualDeparture, beijing: timeLabel(detailParams.get('atdBeijing')) || actualDeparture };
+  if (actualArrival) selectedLeg.actualArr = { lt: actualArrival, utc: timeLabel(detailParams.get('ataUtc')) || actualArrival, beijing: timeLabel(detailParams.get('ataBeijing')) || actualArrival };
 
   const flightId = detailParams.get('flightId');
   const flightNo = detailParams.get('flightNo');
@@ -194,6 +234,31 @@ function renderAircraft(registration) {
   document.querySelector('#overviewAircraft').textContent = `${registration} · ${profile.model}`;
 }
 
+function renderMovement(leg, depField, arrField, basisLabel) {
+  const meta = movementStateMeta[leg.movementState] || movementStateMeta.planned;
+  const basisKey = timeBasis === 'beijing' ? 'beijing' : timeBasis;
+  const value = (timeSet, fallback = '—') => timeSet?.[basisKey] || fallback;
+  const setTime = (selector, time, empty = false) => {
+    const element = document.querySelector(selector);
+    element.textContent = time === '—' ? time : `${time} ${basisLabel}`;
+    element.classList.toggle('is-empty', empty || time === '—');
+  };
+
+  const status = document.querySelector('#movementStatus');
+  status.className = `movement-status is-${leg.movementState || 'planned'}`;
+  status.querySelector('span').textContent = meta.label;
+  document.querySelector('#movementSummary').textContent = meta.summary;
+  document.querySelector('#movementUpdatedAt').textContent = `最后同步 ${leg.movementUpdatedAt || '刚刚'}`;
+  document.querySelector('.plane-mark').textContent = meta.code;
+
+  setTime('#scheduledDeparture', leg[depField]);
+  setTime('#scheduledArrival', leg[arrField]);
+  setTime('#estimatedDeparture', value(leg.estimatedDep, leg[depField]));
+  setTime('#estimatedArrival', value(leg.estimatedArr, leg[arrField]));
+  setTime('#actualDeparture', value(leg.actualDep), !leg.actualDep);
+  setTime('#actualArrival', value(leg.actualArr), !leg.actualArr);
+}
+
 function renderLeg(index) {
   activeLeg = index;
   const leg = tripLegs[index];
@@ -219,12 +284,16 @@ function renderLeg(index) {
   const [depField, arrField, basisLabel] = timeFields[timeBasis];
   document.querySelector('#depTime').innerHTML = `${leg.depDate}&nbsp; ${leg[depField]} <small>${basisLabel}</small>`;
   document.querySelector('#arrTime').innerHTML = `${leg.arrDate}&nbsp; ${leg[arrField]} <small>${basisLabel}</small>`;
+  renderMovement(leg, depField, arrField, basisLabel);
   document.querySelector('#crumbLeg').textContent = `航班 ${index + 1}`;
   document.querySelector('#legNumber').textContent = index + 1;
   document.querySelectorAll('.leg-card').forEach((card, cardIndex) => {
     const cardLeg = tripLegs[cardIndex];
+    const cardMovement = movementStateMeta[cardLeg.movementState] || movementStateMeta.planned;
+    card.querySelector('small').textContent = `航班 ${cardIndex + 1} · ${cardMovement.label}`;
     card.querySelector('b').textContent = `${cardLeg.dep} → ${cardLeg.arr}`;
     card.querySelector('span').textContent = `${cardLeg.depDate} · ${cardLeg.depLocal}–${cardLeg.arrLocal}`;
+    card.classList.toggle('completed', cardLeg.movementState === 'arrived');
     card.classList.toggle('active', cardIndex === index);
     if (cardIndex === index) card.setAttribute('aria-current', 'true'); else card.removeAttribute('aria-current');
   });
