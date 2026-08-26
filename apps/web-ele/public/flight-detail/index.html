@@ -66,6 +66,33 @@
         <figure class="aircraft-photo"><img src="assets/g450-taxiing.jpg" alt="白色公务机在机场滑行道上滑行" /></figure>
       </section>
 
+      <section class="flight-movement" aria-labelledby="movementTitle">
+        <header class="movement-overview">
+          <div>
+            <h2 id="movementTitle">航班动态</h2>
+            <p id="movementSummary">航班已离港，持续更新预计到达时间</p>
+          </div>
+          <div class="movement-state-block">
+            <strong class="movement-status is-departed" id="movementStatus"><i aria-hidden="true"></i><span>已起飞</span></strong>
+            <time id="movementUpdatedAt">最后同步 14:39:26</time>
+          </div>
+        </header>
+        <div class="movement-time-groups" aria-label="计划、预计和实际起降时间">
+          <article class="movement-time-group is-scheduled">
+            <h3>计划</h3>
+            <dl><div><dt>起飞</dt><dd><time id="scheduledDeparture">14:20 LT</time></dd></div><div><dt>到达</dt><dd><time id="scheduledArrival">20:35 LT</time></dd></div></dl>
+          </article>
+          <article class="movement-time-group is-estimated">
+            <h3>预计</h3>
+            <dl><div><dt>起飞</dt><dd><time id="estimatedDeparture">14:35 LT</time></dd></div><div><dt>到达</dt><dd><time id="estimatedArrival">20:48 LT</time></dd></div></dl>
+          </article>
+          <article class="movement-time-group is-actual">
+            <h3>实际</h3>
+            <dl><div><dt>起飞</dt><dd><time id="actualDeparture">14:37 LT</time></dd></div><div><dt>到达</dt><dd><time class="is-empty" id="actualArrival">—</time></dd></div></dl>
+          </article>
+        </div>
+      </section>
+
       <nav class="tabs" aria-label="航班详情页面">
         <button class="tab active" data-tab="overview">总览 <em class="tab-module-status info" aria-label="准备度 82%" title="准备度 82%"><i></i>82</em></button>
         <button class="tab" data-tab="flight">航班 <em class="tab-module-status ready" aria-label="1 项已确认" title="1 项已确认"><i></i>1</em></button>

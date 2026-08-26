@@ -158,6 +158,23 @@ const flightTodos = reactive<Record<string, FlightTodo[]>>({
     { content: '调整前序航段到达时间', id: 'TODO-8', status: 'blocked' },
     { content: '重新确认机组执勤衔接', id: 'TODO-9', status: 'pending' },
   ],
+  'FP-214': [
+    { content: '确认北京首都落地许可', id: 'TODO-10', status: 'pending' },
+  ],
+  'FP-217': [
+    { content: '核对成都地服保障单', id: 'TODO-11', status: 'completed' },
+    { content: '确认返程机组执勤时间', id: 'TODO-12', status: 'pending' },
+  ],
+  'FP-221': [
+    { content: '等待香港航权批复', id: 'TODO-13', status: 'blocked' },
+    { content: '确认旅客接送安排', id: 'TODO-14', status: 'pending' },
+  ],
+  'FP-225': [
+    { content: '补充成都航油订单', id: 'TODO-15', status: 'pending' },
+  ],
+  'FP-229': [
+    { content: '确认虹桥停机位', id: 'TODO-16', status: 'completed' },
+  ],
 });
 
 const newTodo = reactive({
@@ -177,6 +194,24 @@ const flights = ref<FlightPlanItem[]>([
   { aircraft: 'B-9308', date: '2026-08-21', flightNo: 'SJX305', from: 'ZSPD', fuel: '加油 WFS 异常', id: 'FP-210', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1620', std: '1330', to: 'ZGGG', type: 'PAX' },
   { aircraft: 'B-602M', date: '2026-08-22', flightNo: 'SJX603', from: 'ZGGG', fuel: '加油 WFS 已确认', id: 'FP-211', permit: '许可 & 地服 已确认', phase: 'arrived', sta: '1040', std: '0820', to: 'ZGSZ', type: 'PAX' },
   { aircraft: 'B-602M', date: '2026-08-22', flightNo: 'SJX604', from: 'ZGSZ', fuel: '加油 WFS 待确认', id: 'FP-212', permit: '许可 & 地服待处理 异常', phase: 'preparing', sta: '1230', std: '1010', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'B-9308', date: '2026-08-23', flightNo: 'SJX306', from: 'ZGGG', fuel: '加油 WFS 已确认', id: 'FP-213', permit: '许可 & 地服 已确认', phase: 'arrived', sta: '1000', std: '0730', to: 'ZSPD', type: 'PAX' },
+  { aircraft: 'B-9308', date: '2026-08-23', flightNo: 'SJX307', from: 'ZSPD', fuel: '加油 WFS 待确认', id: 'FP-214', permit: '北京落地许可待确认', phase: 'preparing', sta: '1550', std: '1330', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'B-9811', date: '2026-08-24', flightNo: 'SJX120', from: 'ZBAA', fuel: '加油 WFS 已确认', id: 'FP-215', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1135', std: '0830', to: 'ZGGG', type: 'PAX' },
+  { aircraft: 'B-602M', date: '2026-08-24', flightNo: 'SJX605', from: 'ZBAA', fuel: '加油 WFS 已确认', id: 'FP-216', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1610', std: '1400', to: 'ZSPD', type: 'FERRY' },
+  { aircraft: 'B-801Q', date: '2026-08-25', flightNo: 'SJX801', from: 'ZUUU', fuel: '加油 WFS 已确认', id: 'FP-217', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1130', std: '0900', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'B-801Q', date: '2026-08-25', flightNo: 'SJX802', from: 'ZBAA', fuel: '加油 WFS 待确认', id: 'FP-218', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1730', std: '1500', to: 'ZUUU', type: 'FERRY' },
+  { aircraft: 'B-9308', date: '2026-08-26', flightNo: 'SJX308', from: 'ZSPD', fuel: '加油 WFS 已确认', id: 'FP-219', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '0930', std: '0710', to: 'ZGSZ', type: 'PAX' },
+  { aircraft: 'B-9308', date: '2026-08-26', flightNo: 'SJX309', from: 'ZGSZ', fuel: '加油 WFS 待确认', id: 'FP-220', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1400', std: '1230', to: 'ZGGG', type: 'PAX' },
+  { aircraft: 'B-602M', date: '2026-08-27', flightNo: 'SJX606', from: 'ZSPD', fuel: '加油 WFS 已确认', id: 'FP-221', permit: '香港航权批复待确认', phase: 'preparing', sta: '1130', std: '0900', to: 'VHHH', type: 'PAX' },
+  { aircraft: 'B-602M', date: '2026-08-27', flightNo: 'SJX607', from: 'VHHH', fuel: '加油 WFS 已确认', id: 'FP-222', permit: 'HK PSP/BAC 已确认', phase: 'confirmed', sta: '1630', std: '1500', to: 'ZGSZ', type: 'FERRY' },
+  { aircraft: 'B-9811', date: '2026-08-28', flightNo: 'SJX121', from: 'ZGSZ', fuel: '加油 WFS 已确认', id: 'FP-223', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1110', std: '0800', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'B-9811', date: '2026-08-28', flightNo: 'SJX122', from: 'ZBAA', fuel: '加油 WFS 待确认', id: 'FP-224', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1645', std: '1430', to: 'ZSPD', type: 'PAX' },
+  { aircraft: 'B-9308', date: '2026-08-29', flightNo: 'SJX310', from: 'ZSPD', fuel: '加油 WFS 待确认', id: 'FP-225', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1035', std: '0730', to: 'ZUUU', type: 'PAX' },
+  { aircraft: 'B-801Q', date: '2026-08-29', flightNo: 'MX-802', from: 'ZUUU', fuel: '加油不适用', id: 'FP-226', permit: '机务窗口 已确认', phase: 'maintenance', sta: '1800', std: '1200', to: 'ZUUU', type: 'MX' },
+  { aircraft: 'B-602M', date: '2026-08-30', flightNo: 'SJX608', from: 'ZGSZ', fuel: '加油 WFS 已确认', id: 'FP-227', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1200', std: '0900', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'B-602M', date: '2026-08-30', flightNo: 'SJX609', from: 'ZBAA', fuel: '加油 WFS 已确认', id: 'FP-228', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1735', std: '1530', to: 'ZSSS', type: 'PAX' },
+  { aircraft: 'B-9811', date: '2026-08-31', flightNo: 'SJX123', from: 'ZSPD', fuel: '加油 WFS 已确认', id: 'FP-229', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1045', std: '0830', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'B-9308', date: '2026-08-31', flightNo: 'SJX311', from: 'ZUUU', fuel: '加油 WFS 待确认', id: 'FP-230', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1550', std: '1300', to: 'ZSPD', type: 'PAX' },
 ]);
 
 const addForm = reactive({
@@ -285,20 +320,29 @@ function todosForFlight(flight: FlightPlanItem) {
   return flightTodos[flight.id] ?? buildDefaultTodos(flight);
 }
 
+function cleanTodoContent(content: string) {
+  return content
+    .replaceAll('已确认', '')
+    .replaceAll('待确认', '')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+}
+
 function formatTodoForCard(content: string) {
-  const characters = Array.from(content);
-  return characters.length > 15 ? `${characters.slice(0, 15).join('')}…` : content;
+  const cleanedContent = cleanTodoContent(content);
+  const characters = [...cleanedContent];
+  return characters.length > 15 ? `${characters.slice(0, 15).join('')}…` : cleanedContent;
 }
 
 function buildDefaultTodos(flight: FlightPlanItem): FlightTodo[] {
   return [
     {
-      content: flight.permit,
+      content: cleanTodoContent(flight.permit),
       id: `${flight.id}-PERMIT`,
       status: flight.permit.includes('已确认') ? 'completed' : 'pending',
     },
     {
-      content: flight.fuel,
+      content: cleanTodoContent(flight.fuel),
       id: `${flight.id}-FUEL`,
       status: flight.fuel.includes('异常')
         ? 'blocked'
@@ -512,7 +556,7 @@ function goToFlightDetail(flight: FlightPlanItem) {
 
 function addTodo() {
   const flight = selectedFlight.value;
-  const content = newTodo.content.trim();
+  const content = cleanTodoContent(newTodo.content);
   if (!flight || !content) {
     ElMessage.warning('请填写待办内容');
     return;
@@ -951,14 +995,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-      <footer class="gantt-legend">
-        <span><i class="status-lime"></i>完成</span>
-        <span><i class="status-amber"></i>待处理</span>
-        <span><i class="status-red"></i>阻碍</span>
-        <span><i class="status-blue"></i>6小时内过站</span>
-        <span><i class="status-red"></i>航段重叠</span>
-        <small>拖动或横向滚动查看整月计划 · 点击航班打开检查器</small>
-      </footer>
     </section>
 
     <section v-else-if="viewMode === 'calendar'" class="alternative-panel">
@@ -1062,7 +1098,12 @@ onBeforeUnmount(() => {
                 @keydown.up.prevent="moveTodoWithKeyboard(todo, -1)"
                 @keydown.down.prevent="moveTodoWithKeyboard(todo, 1)"
               ><span aria-hidden="true">⠇</span></button>
-              <ElInput v-model="todo.content" aria-label="待办内容" class="todo-content-input" />
+              <ElInput
+                v-model="todo.content"
+                aria-label="待办内容"
+                class="todo-content-input"
+                @blur="todo.content = cleanTodoContent(todo.content)"
+              />
               <div class="todo-status-lights" role="radiogroup" :aria-label="`待办状态：${getTodoStatus(todo.status).label}`">
                 <button
                   v-for="status in todoStatusOptions"
@@ -1166,8 +1207,8 @@ onBeforeUnmount(() => {
 .hour-line { position: absolute; z-index: 0; left: 0; width: 100%; border-top: 1px solid #e1e5e9; color: #b1b8c0; font-size: 10px; }
 .hour-line i { position: absolute; top: 4px; left: 7px; font-style: normal; }
 .current-time-line { position: absolute; z-index: 3; left: 0; width: 100%; border-top: 1px dashed #f05252; }
-.current-time-line i { position: absolute; top: -9px; right: 6px; padding-left: 6px; color: #ef4444; font-size: 10px; font-style: normal; background: #fff; }
-.flight-card { position: absolute; z-index: 4; left: 7px; display: grid; grid-template-columns: minmax(0,1fr) minmax(88px,var(--todos-width,120px)); gap: 6px; width: min(calc(100% - 14px),var(--card-width,calc(100% - 14px))); max-width: calc(100% - 14px); min-height: 58px; padding: 8px; overflow: hidden; border: 1px solid #cbd8e6; border-radius: 5px; color: #202833; text-align: left; box-shadow: 0 5px 12px rgba(31,55,79,.07); transition: 160ms ease; }
+.current-time-line i { position: absolute; top: -9px; left: 7px; padding-right: 6px; color: #ef4444; font-size: 10px; font-style: normal; background: #fff; }
+.flight-card { position: absolute; z-index: 4; right: 7px; display: grid; grid-template-columns: minmax(0,1fr) minmax(88px,var(--todos-width,120px)); gap: 6px; width: min(calc(100% - 14px),var(--card-width,calc(100% - 14px))); max-width: calc(100% - 14px); min-height: 58px; padding: 8px; overflow: hidden; border: 1px solid #cbd8e6; border-radius: 5px; color: #202833; text-align: left; box-shadow: 0 5px 12px rgba(31,55,79,.07); transition: 160ms ease; }
 .flight-card:hover, .flight-card:focus-visible { z-index: 8; outline: 2px solid rgba(63,124,255,.36); transform: translateY(-2px); box-shadow: 0 11px 24px rgba(31,55,79,.15); }
 .phase-arrived { border-color: #c9d8e8; background: #eef3f8; }
 .phase-confirmed { border-color: #c4d6ef; background: #edf5ff; }
@@ -1281,10 +1322,6 @@ onBeforeUnmount(() => {
 .gantt-bar-status { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; }
 .gantt-current-time { position: absolute; z-index: 5; top: 64px; bottom: 0; width: 1px; pointer-events: none; background: var(--sj-red); }
 .gantt-current-time i { position: absolute; top: var(--sj-space-1); left: 4px; padding: 2px var(--sj-space-1); border-radius: var(--sj-radius-tag); color: var(--sj-canvas); background: var(--sj-red); font: 750 8px var(--sj-font-data); font-style: normal; white-space: nowrap; }
-.gantt-legend { display: flex; min-height: 42px; padding: 0 var(--sj-space-3); align-items: center; gap: var(--sj-space-4); border-top: 1px solid var(--sj-border); color: var(--sj-text-2); background: var(--sj-surface-1); font-size: 10px; }
-.gantt-legend > span { display: inline-flex; align-items: center; gap: var(--sj-space-1); }
-.gantt-legend > span i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.gantt-legend small { margin-left: auto; color: var(--sj-text-3); font: 9px var(--sj-font-data); }
 .calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 1px; overflow: hidden; border: 1px solid #e1e6eb; border-radius: 12px; background: #e1e6eb; }
 .calendar-day { min-height: 138px; padding: 10px; background: #fff; }
 .calendar-day header { display: flex; justify-content: space-between; margin-bottom: 10px; color: #5b6677; }
@@ -1336,7 +1373,7 @@ onBeforeUnmount(() => {
 .edit-flight-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
 .edit-flight-form :deep(.el-form-item__label) { color: #cfd5df; font-weight: 600; }
 @media (max-width: 1180px) { .toolbar-spacer { display: none; } .timezone-field { margin-left: 0; } }
-@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .gantt-layout { grid-template-columns: 128px minmax(0, 1fr); } .gantt-aircraft-column > div, .gantt-row { height: 86px; } .gantt-flight-bar { min-width: 104px; } .gantt-legend small { display: none; } }
+@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .gantt-layout { grid-template-columns: 128px minmax(0, 1fr); } .gantt-aircraft-column > div, .gantt-row { height: 86px; } .gantt-flight-bar { min-width: 104px; } }
 
 /* Mission Control Dark: opt-in operational workspace skin. */
 .flight-plan-page.sj-mission-control {
