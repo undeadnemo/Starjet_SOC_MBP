@@ -511,7 +511,7 @@ button { color: inherit; font: inherit; }
 .side-modules { display: grid; height: 100%; min-width: 0; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: var(--sj-space-4); }
 .compact-module { display: grid; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .compact-module .module-header { min-height: 52px; }
-.module-scroll { min-height: 0; padding: 0 var(--sj-space-3); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.module-scroll { min-height: 0; padding: 0 var(--sj-space-3); overflow-y: auto; overscroll-behavior: contain; }
 .panel-item { display: grid; width: 100%; min-width: 0; padding: var(--sj-space-3) 0; align-items: center; grid-template-columns: 10px minmax(0, 1fr) auto; gap: var(--sj-space-2); border: 0; border-top: 1px solid var(--sj-grid); color: inherit; text-align: left; background: transparent; cursor: pointer; }
 .panel-item:first-child { border-top: 0; }
 .panel-item:hover { background: var(--sj-surface-2); }
@@ -562,6 +562,29 @@ button { color: inherit; font: inherit; }
 .notice-item:hover { background: var(--sj-surface-2); }
 .notice-list strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .configure-button:focus-visible, .quick-action-row button:focus-visible, .panel-item:focus-visible, .notice-item:focus-visible { outline: 2px solid var(--sj-blue); outline-offset: 2px; }
+
+/* Keep dense work areas scrollable without drawing persistent heavy tracks. */
+:is(.module-scroll, .queue-table-wrap, .quick-action-row) {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+:is(.module-scroll, .queue-table-wrap, .quick-action-row):is(:hover, :focus-within) {
+  scrollbar-color: var(--sj-border-strong) transparent;
+}
+:is(.module-scroll, .queue-table-wrap, .quick-action-row)::-webkit-scrollbar {
+  width: var(--sj-space-1);
+  height: var(--sj-space-1);
+}
+:is(.module-scroll, .queue-table-wrap, .quick-action-row)::-webkit-scrollbar-track {
+  background: transparent;
+}
+:is(.module-scroll, .queue-table-wrap, .quick-action-row)::-webkit-scrollbar-thumb {
+  border-radius: var(--sj-radius-tag);
+  background: transparent;
+}
+:is(.module-scroll, .queue-table-wrap, .quick-action-row):is(:hover, :focus-within)::-webkit-scrollbar-thumb {
+  background: var(--sj-border-strong);
+}
 
 @media (max-width: 1279px) {
   .dashboard-grid, .workbench-content, .side-modules { gap: var(--sj-space-3); }
