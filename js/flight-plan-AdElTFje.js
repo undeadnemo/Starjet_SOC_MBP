@@ -1,0 +1,1 @@
+import{$n as e,En as t,Pn as n,nn as r}from"../jse/index-index-D9UB2iqO.js";import{t as i}from"./content-C6EEQNAF.js";var a=n(r(r({},{name:`FlightPlan`}),{},{__name:`index`,setup(n){return(n,r)=>(e(),t(i))}}));export{a as default};

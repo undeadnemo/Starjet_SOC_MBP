@@ -232,6 +232,15 @@ function renderAircraft(registration) {
   document.querySelector('#aircraftDetailRegistration').textContent = registration;
   document.querySelector('#aircraftDetailModel').textContent = profile.model;
   document.querySelector('#overviewAircraft').textContent = `${registration} · ${profile.model}`;
+  document.querySelector('#aircraftCurrentPosition').textContent = `${profile.parkingAirport} · ${airportProfiles[profile.parkingAirport] || '当前位置'}`;
+  document.querySelector('#aircraftPositionTime').textContent = `定位时间 ${profile.parkingTime} BJ`;
+  const nextLeg = tripLegs.slice(activeLeg + 1).find(leg => leg.aircraft === registration);
+  const nextLegInfo = document.querySelector('#nextLegInfo');
+  nextLegInfo.hidden = !nextLeg;
+  if (nextLeg) {
+    document.querySelector('#aircraftNextLeg').textContent = `${nextLeg.dep} → ${nextLeg.arr}`;
+    document.querySelector('#aircraftNextLegTime').textContent = `${nextLeg.depDate} · ${nextLeg.depLocal}–${nextLeg.arrLocal} BJ`;
+  }
 }
 
 function renderMovement(leg, depField, arrField, basisLabel) {
@@ -270,14 +279,13 @@ function renderLeg(index) {
   document.querySelector('#flightDistance').textContent = leg.distance;
   document.querySelector('.trip-type').textContent = leg.taskType;
   document.querySelector('#flightTaskType').textContent = leg.taskType;
-  document.querySelector('#plannedRoute').textContent = `${leg.dep} → ${leg.arr}`;
   document.querySelector('#timelineDepTime').textContent = leg.depLocal;
   document.querySelector('#timelineArrTime').textContent = leg.arrLocal;
   document.querySelector('#serviceDepartureAirport').textContent = `${leg.dep} · ${leg.depName.split(' · ')[0]}`;
   document.querySelector('#serviceArrivalAirport').textContent = `${leg.arr} · ${leg.arrName.split(' · ')[0]}`;
   renderAircraft(leg.aircraft);
   const timeFields = {
-    beijing: ['depBeijing', 'arrBeijing', '北京时间'],
+    beijing: ['depBeijing', 'arrBeijing', 'BJ'],
     lt: ['depLocal', 'arrLocal', 'LT'],
     utc: ['depUtc', 'arrUtc', 'UTC'],
   };
@@ -407,7 +415,7 @@ const sectionObserver = new IntersectionObserver(entries => {
   setActiveTab(visibleSection.target.id);
 }, { rootMargin: '-74px 0px -58% 0px', threshold: [0.05, 0.2, 0.5] });
 
-document.querySelectorAll('.tab-panel').forEach(panel => sectionObserver.observe(panel));
+document.querySelectorAll('.tab-panel:not(.retired-overview)').forEach(panel => sectionObserver.observe(panel));
 
 const resumeScrollTracking = () => { navigationTarget = ''; };
 window.addEventListener('wheel', resumeScrollTracking, { passive: true });
@@ -430,6 +438,62 @@ timeToggle.addEventListener('click', event => {
 });
 
 renderLeg(activeLeg);
+
+document.querySelector('#changeRecordList')?.addEventListener('click', event => {
+  const record = event.target.closest('[data-change-record]');
+  if (!record) return;
+  document.querySelectorAll('[data-change-record]').forEach(item => {
+    const active = item === record;
+    item.classList.toggle('active', active);
+    item.querySelector('em').textContent = active ? '生效' : '设为生效';
+  });
+  showToast('已更新当前生效的航班变更记录');
+});
+
+document.querySelector('#passengerDocumentUpload')?.addEventListener('change', event => {
+  const [file] = event.target.files;
+  if (!file) return;
+  const status = document.querySelector('#passengerOcrStatus');
+  status.hidden = false;
+  status.innerHTML = `<b>${escapeHtml(file.name)}</b><span>模拟 OCR 识别完成，请复核姓名、证件号、签发国和有效期。</span>`;
+  showToast('证件已上传，模拟 OCR 识别完成');
+});
+
+const fuelInputs = ['#fuelBeforeRefuel', '#fuelUplift'].map(selector => document.querySelector(selector));
+const updateFuelTotal = () => {
+  const total = fuelInputs.reduce((sum, input) => sum + (Number(input?.value) || 0), 0);
+  document.querySelector('#fuelAfterRefuel').textContent = total.toLocaleString('zh-CN');
+};
+fuelInputs.forEach(input => input?.addEventListener('input', updateFuelTotal));
+document.querySelector('#saveFuelRecords')?.addEventListener('click', () => showToast('关键节点油量记录已保存'));
+
+const permitTable = document.querySelector('#permitTable');
+const applyPermitStatusColor = select => {
+  if (select) select.dataset.status = select.value;
+};
+const updatePermitSummary = () => {
+  const selects = [...permitTable.querySelectorAll('.permit-status')];
+  selects.forEach(applyPermitStatusColor);
+  const statuses = selects.map(select => select.value);
+  const available = statuses.filter(status => status === '已批准' || status === '不适用').length;
+  document.querySelector('#permitSummary').textContent = `${available}/${statuses.length} 可用`;
+};
+permitTable?.addEventListener('change', event => {
+  if (event.target.matches('.permit-status')) {
+    updatePermitSummary();
+    showToast('许可状态已更新');
+  }
+  if (event.target.matches('.permit-type')) showToast('许可类型已更新');
+});
+document.querySelector('#addPermit')?.addEventListener('click', () => {
+  const row = document.createElement('div');
+  row.className = 'permit-row';
+  row.innerHTML = '<select class="permit-type" aria-label="新许可类型"><option selected>Permit</option><option>Slot</option><option>PPR</option><option>Parking</option></select><span contenteditable="true">新许可</span><span contenteditable="true">待填写</span><span contenteditable="true">待填写</span><select class="permit-status" aria-label="新许可状态"><option selected>待申请</option><option>处理中</option><option>已批准</option><option>不适用</option></select>';
+  permitTable.append(row);
+  updatePermitSummary();
+  row.querySelector('[contenteditable]')?.focus();
+});
+updatePermitSummary();
 
 const flightEditDialog = document.querySelector('#flightEditDialog');
 const flightEditForm = document.querySelector('#flightEditForm');
@@ -572,6 +636,13 @@ function exportMaterial(key) {
 
 document.querySelectorAll('[data-export]').forEach(button => {
   button.addEventListener('click', () => exportMaterial(button.dataset.export));
+});
+
+document.querySelectorAll('[data-preview]').forEach(button => {
+  button.addEventListener('click', () => {
+    const title = exportMaterials[button.dataset.preview];
+    if (title) showToast(`正在预览：${title}`);
+  });
 });
 
 document.querySelector('[data-export-all]')?.addEventListener('click', () => {
