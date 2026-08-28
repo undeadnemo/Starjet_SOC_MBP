@@ -124,6 +124,11 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
           name: '保障进程',
           path: `${prefix}/service-progress`,
         },
+        {
+          icon: 'lucide:files',
+          name: '航班账单预管理',
+          path: `${prefix}/flight-bill-pre-management`,
+        },
       ],
       icon: 'lucide:plane',
       name: '航班管理',
@@ -152,6 +157,18 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
       icon: 'lucide:landmark',
       name: '财务管理',
       path: `${prefix}/finance`,
+    },
+    {
+      children: [
+        {
+          icon: 'lucide:warehouse',
+          name: '航材台账',
+          path: `${prefix}/aviation-materials`,
+        },
+      ],
+      icon: 'lucide:package-open',
+      name: '航材管理',
+      path: `${prefix}/materials`,
     },
     {
       children: [
@@ -219,9 +236,9 @@ onMounted(() => window.addEventListener('starjet:crew-unassigned-count', handleC
 onBeforeUnmount(() => window.removeEventListener('starjet:crew-unassigned-count', handleCrewUnassignedCount));
 
 watch(
-  () => router.currentRoute.value.path,
-  (path) => {
-    if (accessStore.accessMenus.length > 0) return;
+  () => [router.currentRoute.value.path, accessStore.accessMenus.length] as const,
+  ([path, menuCount]) => {
+    if (menuCount > 0) return;
     const prefix = path.startsWith('/demo/')
       ? '/demo'
       : path.startsWith('/preview/')
@@ -229,7 +246,7 @@ watch(
         : null;
     if (prefix) accessStore.setAccessMenus(createPreviewMenus(prefix));
   },
-  { immediate: true },
+  { flush: 'post', immediate: true },
 );
 
 const menus = computed(() => [

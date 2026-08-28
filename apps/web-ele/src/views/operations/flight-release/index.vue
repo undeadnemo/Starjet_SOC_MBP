@@ -49,7 +49,7 @@ const flights = ref<ReleaseFlight[]>([
   { id: 'REL-06', date: '2026-08-24', flightNo: 'SJX619', registration: 'B-9308', aircraft: 'G450', origin: 'ZGSZ', destination: 'ZGGG', std: '0410Z', etd: '0410Z', atd: '', sta: '0530Z', eta: '0530Z', ata: '', alternates: 'ZHUH', checks: { cfp: 'ready', weather: 'ready', notam: 'ready', fpl: 'ready' }, releaseStatus: '待放行', releaseTime: '', releaseBy: '' },
 ]);
 
-const timeBase = ref<'UTC' | 'BJ'>('UTC');
+const timeBase = ref<'LT' | 'UTC' | 'BJ'>('UTC');
 const startDate = ref('2026-08-22');
 const endDate = ref('2026-08-24');
 const flightFilter = ref('');
@@ -107,7 +107,7 @@ function confirmRelease() {
   <main class="release-page sj-mission-control" data-starjet-theme="mission-control-dark">
     <header class="command-bar">
       <div class="filters">
-        <label class="field time-field"><span>时间基准</span><span class="segmented"><button :class="{ active: timeBase === 'UTC' }" @click="timeBase = 'UTC'">UTC</button><button :class="{ active: timeBase === 'BJ' }" @click="timeBase = 'BJ'">北京时间</button></span></label>
+        <label class="field time-field"><span>时间基准</span><span class="segmented"><button :class="{ active: timeBase === 'LT' }" @click="timeBase = 'LT'">LT</button><button :class="{ active: timeBase === 'UTC' }" @click="timeBase = 'UTC'">UTC</button><button :class="{ active: timeBase === 'BJ' }" @click="timeBase = 'BJ'">BJ</button></span></label>
         <label class="field"><span>开始日期</span><input v-model="startDate" type="date" /></label>
         <label class="field"><span>结束日期</span><input v-model="endDate" type="date" /></label>
         <label class="field"><span>航班号</span><input v-model="flightFilter" placeholder="如 SJX603" /></label>

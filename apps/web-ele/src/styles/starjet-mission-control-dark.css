@@ -68,12 +68,58 @@
   --sj-duration-panel: 200ms;
 }
 
+/*
+ * The application shell owns the theme switch by toggling `html.dark`.
+ * Keep the Mission Control palette token-driven so every operational page
+ * follows that switch without maintaining a separate page-level skin.
+ */
+html:not(.dark),
+html:not(.dark) .sj-mission-control,
+html:not(.dark) [data-starjet-theme='mission-control-dark'] {
+  --sj-canvas: #f3f6f9;
+  --sj-surface-1: #ffffff;
+  --sj-surface-2: #f8fafc;
+  --sj-surface-3: #eef2f6;
+  --sj-surface-4: #e5ebf2;
+  --sj-grid: #e3e9f0;
+  --sj-border: #d9e1ea;
+  --sj-border-strong: #b8c4d2;
+
+  --sj-text-1: #172033;
+  --sj-text-2: #465469;
+  --sj-text-3: #748196;
+  --sj-text-disabled: #a1aab7;
+
+  --sj-blue: #1677d2;
+  --sj-blue-soft: rgb(22 119 210 / 10%);
+  --sj-lime: #5f9415;
+  --sj-lime-soft: rgb(95 148 21 / 11%);
+  --sj-amber: #a86500;
+  --sj-amber-soft: rgb(168 101 0 / 11%);
+  --sj-red: #cf3d38;
+  --sj-red-soft: rgb(207 61 56 / 10%);
+  --sj-purple: #7d4cc2;
+  --sj-purple-soft: rgb(125 76 194 / 10%);
+  --sj-teal: #087e72;
+  --sj-teal-soft: rgb(8 126 114 / 10%);
+
+  --sj-shadow-panel: 0 12px 28px rgb(23 32 51 / 10%);
+  --sj-shadow-selected: 0 0 0 1px rgb(22 119 210 / 28%),
+    0 8px 22px rgb(22 119 210 / 9%);
+  --sj-focus-ring: 0 0 0 2px var(--sj-canvas),
+    0 0 0 4px var(--sj-blue);
+}
+
 .sj-mission-control,
 [data-starjet-theme='mission-control-dark'] {
   color: var(--sj-text-1);
   background: var(--sj-canvas);
   font-family: var(--sj-font-ui);
   color-scheme: dark;
+}
+
+html:not(.dark) :is(.sj-mission-control, [data-starjet-theme='mission-control-dark']) {
+  color-scheme: light;
 }
 
 .sj-mission-control :is(code, time, .sj-data) {

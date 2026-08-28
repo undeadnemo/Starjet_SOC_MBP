@@ -528,7 +528,9 @@ button { color: inherit; font: inherit; }
 .personal-todo-list { padding-block: var(--sj-space-1); }
 .personal-todo-item { display: grid; min-height: 42px; align-items: center; grid-template-columns: 22px minmax(0, 1fr) 28px; gap: var(--sj-space-1); border-top: 1px solid var(--sj-grid); }
 .personal-todo-item:first-child { border-top: 0; }
-.personal-todo-item input, .todo-create input { width: 100%; min-width: 0; border: 1px solid transparent; color: var(--sj-text-1); outline: 0; background: transparent; font-size: 10px; }
+.personal-todo-item input, .todo-create input { width: 100%; min-width: 0; border: 1px solid transparent; color: var(--sj-text-1); outline: 0; background: transparent; }
+.personal-todo-item input { font-size: 11px; font-weight: 650; line-height: 1.4; }
+.todo-create input { font-size: 10px; line-height: 1.4; }
 .personal-todo-item input:focus { border-color: var(--sj-border-strong); background: var(--sj-surface-2); }
 .personal-todo-item.complete input { color: var(--sj-text-3); text-decoration: line-through; }
 .todo-check, .todo-delete, .todo-create button { display: grid; padding: 0; place-items: center; background: transparent; cursor: pointer; }

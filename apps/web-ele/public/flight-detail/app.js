@@ -52,6 +52,121 @@ const airportProfiles = {
 };
 
 const detailParams = new URLSearchParams(window.location.search);
+const detailTheme = detailParams.get('theme') === 'light' ? 'light' : 'dark';
+document.documentElement.classList.toggle('light', detailTheme === 'light');
+document.documentElement.classList.toggle('dark', detailTheme === 'dark');
+const billTemplateStorageKey = 'starjet-flight-bill-templates';
+const baseBillTemplates = [
+  { code: 'PAX', label: '客运包机', types: [
+    { id: 1, name: '航油账单', owner: 'flight' }, { id: 2, name: '地面代理费', owner: 'flight' }, { id: 3, name: '机场费用', owner: 'flight' }, { id: 4, name: '餐食费用', owner: 'trip' }, { id: 5, name: '旅客服务费', owner: 'trip' },
+  ] },
+  { code: 'FERRY', label: '调机', types: [
+    { id: 6, name: '航油账单', owner: 'flight' }, { id: 7, name: '地面代理费', owner: 'flight' }, { id: 8, name: '机场费用', owner: 'flight' },
+  ] },
+  { code: 'MX', label: '维修', types: [
+    { id: 9, name: '维修航材费', owner: 'flight' }, { id: 10, name: '维修工时费', owner: 'flight' }, { id: 11, name: '停场费', owner: 'trip' },
+  ] },
+  { code: 'AOG', label: 'AOG', types: [
+    { id: 12, name: '航材采购费', owner: 'flight' }, { id: 13, name: '紧急物流费', owner: 'flight' }, { id: 14, name: '维修服务费', owner: 'trip' },
+  ] },
+];
+const billRouteScopes = [
+  { label: '国内', value: 'domestic' },
+  { label: '跨境', value: 'crossBorder' },
+  { label: '国际', value: 'international' },
+];
+const defaultBillTemplates = baseBillTemplates.flatMap((template) => billRouteScopes.map((scope, scopeIndex) => ({
+  ...template,
+  scope: scope.value,
+  scopeLabel: scope.label,
+  types: template.types.map((item) => ({ ...item, id: item.id + scopeIndex * 100 })),
+})));
+const completedPaymentApplications = [
+  { amount: '付款 CNY 28,600', billType: '地面代理费', flightType: 'PAX', id: 'FK-20260823-006', routeScope: 'domestic', title: '广州地面保障费用', updatedAt: '2026-08-24 11:08' },
+  { amount: '付款 HKD 46,200', billType: '地面代理费', flightType: 'FERRY', id: 'FK-20260818-007', routeScope: 'crossBorder', title: '香港航段落地服务费用', updatedAt: '2026-08-21 10:02' },
+];
+
+function readBillTemplates() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(billTemplateStorageKey) || 'null');
+    if (!Array.isArray(saved) || !saved.some((item) => item?.code && Array.isArray(item.types))) return defaultBillTemplates;
+    if (saved.every((item) => item.scope)) return saved;
+    return saved.flatMap((template) => billRouteScopes.map((scope, scopeIndex) => ({
+      ...template,
+      scope: scope.value,
+      scopeLabel: scope.label,
+      types: template.types.map((item) => ({ ...item, id: item.id + scopeIndex * 100 })),
+    })));
+  } catch {
+    return defaultBillTemplates;
+  }
+}
+
+function normalizeBillFlightType(taskType) {
+  const value = String(taskType || '').toUpperCase();
+  if (['CHARTER', 'PAX', 'PASSENGER'].includes(value)) return 'PAX';
+  if (['FERRY', 'MX', 'AOG'].includes(value)) return value;
+  return 'PAX';
+}
+
+function resolveBillRouteScope(departure, arrival) {
+  const airports = [departure, arrival].map((airport) => String(airport || '').toUpperCase());
+  const isMainland = (airport) => /^Z[A-Z]{3}$/.test(airport);
+  const isCrossBorder = (airport) => airport === 'VHHH' || airport === 'VMMC' || /^RC[A-Z]{2}$/.test(airport);
+  if (airports.every(isMainland)) return 'domestic';
+  if (airports.every((airport) => isMainland(airport) || isCrossBorder(airport)) && airports.some(isCrossBorder)) return 'crossBorder';
+  return 'international';
+}
+
+function paymentApplicationHref(applicationId) {
+  let routePrefix = '/preview';
+  try {
+    const parentPath = window.parent.location.pathname;
+    routePrefix = parentPath.startsWith('/demo/') ? '/demo' : parentPath.startsWith('/preview/') ? '/preview' : '/finance';
+  } catch { /* iframe may run independently */ }
+  const base = routePrefix === '/finance' ? '/finance/payment-application' : `${routePrefix}/payment-application`;
+  return `${base}?applicationId=${encodeURIComponent(applicationId)}`;
+}
+
+function renderBilling(leg) {
+  const flightType = normalizeBillFlightType(leg?.taskType);
+  const routeScope = resolveBillRouteScope(leg?.dep, leg?.arr);
+  const scopeLabel = billRouteScopes.find((item) => item.value === routeScope)?.label || '国内';
+  const templates = readBillTemplates();
+  const template = templates.find((item) => item.code === flightType && item.scope === routeScope)
+    || templates.find((item) => item.code === flightType)
+    || defaultBillTemplates[0];
+  const flightNo = detailParams.get('flightNo') || `航班 ${activeLeg + 1}`;
+  const records = template.types.map((item, index) => {
+    const payment = completedPaymentApplications.find((application) => application.flightType === flightType && application.routeScope === routeScope && application.billType === item.name);
+    const state = payment ? 'paid' : index === 0 || index % 3 === 1 ? 'received' : 'missing';
+    return { ...item, payment, state };
+  });
+  const counts = {
+    missing: records.filter((item) => item.state === 'missing').length,
+    paid: records.filter((item) => item.state === 'paid').length,
+    received: records.filter((item) => item.state === 'received').length,
+  };
+  document.querySelector('#billingTemplateLabel').textContent = `${template.label} · ${scopeLabel} · ${flightNo}`;
+  document.querySelector('#billingTotal').textContent = records.length;
+  document.querySelector('#billingMissing').textContent = counts.missing;
+  document.querySelector('#billingReceived').textContent = counts.received;
+  document.querySelector('#billingPaid').textContent = counts.paid;
+  const tabStatus = document.querySelector('#billingTabStatus');
+  tabStatus.className = `tab-module-status ${counts.missing ? 'warning' : 'ready'}`;
+  tabStatus.querySelector('span').textContent = counts.missing || records.length;
+  tabStatus.setAttribute('aria-label', counts.missing ? `${counts.missing} 项账单待上传` : '账单已齐');
+  tabStatus.title = tabStatus.getAttribute('aria-label');
+  const table = document.querySelector('#billingTable');
+  table.innerHTML = `<div class="billing-row billing-head"><span>账单类型</span><span>归属对象</span><span>账单状态</span><span>财务联动</span><span>最近更新</span></div>${records.map((item) => {
+    const stateLabel = item.state === 'paid' ? '已付款' : item.state === 'received' ? '已上传' : '待上传';
+    const financeLink = item.payment
+      ? `<a href="${paymentApplicationHref(item.payment.id)}" target="_top"><b>${escapeHtml(item.payment.id)}</b><small>${escapeHtml(item.payment.amount)}</small></a>`
+      : '<span class="billing-no-link">暂无付款申请</span>';
+    const updatedAt = item.payment?.updatedAt || (item.state === 'received' ? '2026-08-27 09:18' : '—');
+    return `<div class="billing-row"><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(template.label)} · ${scopeLabel}预配置</small></span><span>${item.owner === 'trip' ? '行程' : '航班'}</span><span><em class="billing-state is-${item.state}"><i></i>${stateLabel}</em></span><span>${financeLink}</span><time>${updatedAt}</time></div>`;
+  }).join('')}`;
+}
 const movementStateMeta = {
   planned: { label: '计划', code: 'PLAN', summary: '航班按计划准备，尚未起飞' },
   departed: { label: '已起飞', code: 'AIR', summary: '航班已离港，持续更新预计到达时间' },
@@ -279,6 +394,7 @@ function renderLeg(index) {
   document.querySelector('#flightDistance').textContent = leg.distance;
   document.querySelector('.trip-type').textContent = leg.taskType;
   document.querySelector('#flightTaskType').textContent = leg.taskType;
+  renderBilling(leg);
   document.querySelector('#timelineDepTime').textContent = leg.depLocal;
   document.querySelector('#timelineArrTime').textContent = leg.arrLocal;
   document.querySelector('#serviceDepartureAirport').textContent = `${leg.dep} · ${leg.depName.split(' · ')[0]}`;
@@ -439,16 +555,23 @@ timeToggle.addEventListener('click', event => {
 
 renderLeg(activeLeg);
 
-document.querySelector('#changeRecordList')?.addEventListener('click', event => {
-  const record = event.target.closest('[data-change-record]');
+const changeRecordList = document.querySelector('#changeRecordList');
+const selectChangeRecord = (record, notify = false) => {
   if (!record) return;
   document.querySelectorAll('[data-change-record]').forEach(item => {
     const active = item === record;
     item.classList.toggle('active', active);
+    item.setAttribute('aria-pressed', String(active));
     item.querySelector('em').textContent = active ? '生效' : '设为生效';
   });
-  showToast('已更新当前生效的航班变更记录');
+  if (notify) showToast('已更新当前生效的航班变更记录');
+};
+changeRecordList?.addEventListener('click', event => {
+  selectChangeRecord(event.target.closest('[data-change-record]'), true);
 });
+const newestChangeRecord = [...(changeRecordList?.querySelectorAll('[data-change-record]') || [])]
+  .sort((a, b) => new Date(b.dataset.recordTime) - new Date(a.dataset.recordTime))[0];
+selectChangeRecord(newestChangeRecord);
 
 document.querySelector('#passengerDocumentUpload')?.addEventListener('change', event => {
   const [file] = event.target.files;
@@ -459,13 +582,30 @@ document.querySelector('#passengerDocumentUpload')?.addEventListener('change', e
   showToast('证件已上传，模拟 OCR 识别完成');
 });
 
-const fuelInputs = ['#fuelBeforeRefuel', '#fuelUplift'].map(selector => document.querySelector(selector));
+const fuelInputs = ['#fuelBeforeDeparture', '#fuelAfterDeparture', '#fuelBeforeRefuel', '#fuelUplift']
+  .map(selector => document.querySelector(selector));
+const fuelTotalInputs = fuelInputs.slice(2);
+const fuelUnit = document.querySelector('#fuelUnit');
 const updateFuelTotal = () => {
-  const total = fuelInputs.reduce((sum, input) => sum + (Number(input?.value) || 0), 0);
+  const total = fuelTotalInputs.reduce((sum, input) => sum + (Number(input?.value) || 0), 0);
   document.querySelector('#fuelAfterRefuel').textContent = total.toLocaleString('zh-CN');
 };
 fuelInputs.forEach(input => input?.addEventListener('input', updateFuelTotal));
-document.querySelector('#saveFuelRecords')?.addEventListener('click', () => showToast('关键节点油量记录已保存'));
+fuelUnit?.addEventListener('change', event => {
+  const nextUnit = event.target.value;
+  const previousUnit = event.target.dataset.previousUnit || 'lb';
+  const factor = previousUnit === nextUnit ? 1 : nextUnit === 'kg' ? 1 / 2.20462 : 2.20462;
+  fuelInputs.forEach(input => {
+    input.value = String(Math.round((Number(input.value) || 0) * factor));
+    input.step = nextUnit === 'kg' ? '5' : '10';
+  });
+  document.querySelectorAll('.fuel-unit-label').forEach(label => { label.textContent = nextUnit; });
+  event.target.dataset.previousUnit = nextUnit;
+  updateFuelTotal();
+  showToast(`油量单位已切换为 ${nextUnit}`);
+});
+if (fuelUnit) fuelUnit.dataset.previousUnit = fuelUnit.value;
+document.querySelector('#saveFuelRecords')?.addEventListener('click', () => showToast(`关键节点油量记录已按 ${fuelUnit?.value || 'lb'} 保存`));
 
 const permitTable = document.querySelector('#permitTable');
 const applyPermitStatusColor = select => {
@@ -485,10 +625,17 @@ permitTable?.addEventListener('change', event => {
   }
   if (event.target.matches('.permit-type')) showToast('许可类型已更新');
 });
+permitTable?.addEventListener('click', event => {
+  const deleteButton = event.target.closest('.permit-delete');
+  if (!deleteButton) return;
+  deleteButton.closest('.permit-row')?.remove();
+  updatePermitSummary();
+  showToast('许可或时刻记录已删除');
+});
 document.querySelector('#addPermit')?.addEventListener('click', () => {
   const row = document.createElement('div');
   row.className = 'permit-row';
-  row.innerHTML = '<select class="permit-type" aria-label="新许可类型"><option selected>Permit</option><option>Slot</option><option>PPR</option><option>Parking</option></select><span contenteditable="true">新许可</span><span contenteditable="true">待填写</span><span contenteditable="true">待填写</span><select class="permit-status" aria-label="新许可状态"><option selected>待申请</option><option>处理中</option><option>已批准</option><option>不适用</option></select>';
+  row.innerHTML = '<select class="permit-type" aria-label="新许可类型"><option selected>Permit</option><option>Slot</option><option>PPR</option><option>Parking</option></select><span contenteditable="true">新许可</span><span contenteditable="true">待填写</span><span contenteditable="true">待填写</span><select class="permit-status" aria-label="新许可状态"><option selected>待申请</option><option>处理中</option><option>已批准</option><option>不适用</option></select><button class="permit-delete" type="button" aria-label="删除新许可">删除</button>';
   permitTable.append(row);
   updatePermitSummary();
   row.querySelector('[contenteditable]')?.focus();

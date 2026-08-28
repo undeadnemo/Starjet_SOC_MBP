@@ -74,6 +74,17 @@ const routes: RouteRecordRaw[] = [
           title: '保障进程',
         },
       },
+      {
+        alias: '/finance/flight-bill-pre-management',
+        component: () =>
+          import('#/views/finance/flight-bill-pre-management/index.vue'),
+        meta: {
+          icon: 'lucide:files',
+          title: '航班账单预管理',
+        },
+        name: 'FlightBillPreManagement',
+        path: '/operations/flight-bill-pre-management',
+      },
     ],
   },
 ];

@@ -28,7 +28,7 @@ interface PaymentRecord {
 
 const route = useRoute();
 const router = useRouter();
-const keyword = ref('');
+const keyword = ref(typeof route.query.applicationId === 'string' ? route.query.applicationId : '');
 const stateFilter = ref<'all' | PaymentState>('all');
 const departmentFilter = ref('全部部门');
 const startDate = ref('2026-08-01');

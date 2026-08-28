@@ -19,7 +19,11 @@ const SparklesIcon = createIconifyIcon('lucide:sparkles');
 type CrewState = 'conflict' | 'ready' | 'rest' | 'warning';
 type DutyState = 'conflict' | 'confirmed' | 'draft';
 type FlightType = 'FERRY' | 'PAX';
+type RosterStatus = 'official' | 'preliminary';
+type RosterStatusFilter = 'all' | RosterStatus;
+type ManualEventType = '借用' | '请休假' | '停飞' | '训练';
 type RosterUnit = 'flight' | 'trip';
+type SmsRuleKey = 'domestic-charter' | 'domestic-ferry' | 'international-charter' | 'international-ferry';
 type CrewRole =
   | 'Captain'
   | 'F/A(Private)'
@@ -53,12 +57,23 @@ interface DutyAssignment {
   from: string;
   crewIds: string[];
   id: string;
+  rosterStatus: RosterStatus;
   sta: string;
   state: DutyState;
   std: string;
   tail: string;
   to: string;
   type: FlightType;
+}
+
+interface ManualRosterEvent {
+  crewId: string;
+  dateIndex: number;
+  end: string;
+  id: string;
+  note: string;
+  start: string;
+  type: ManualEventType;
 }
 
 interface UnassignedFlight {
@@ -79,6 +94,14 @@ interface RosterTrip {
   flightIds: string[];
   id: string;
   name: string;
+}
+
+interface SmsRule {
+  advanceHours: number;
+  enabled: boolean;
+  key: SmsRuleKey;
+  label: string;
+  template: string;
 }
 
 const dates = [
@@ -134,11 +157,11 @@ const crewMembers: CrewMember[] = [
 ];
 
 const assignments = ref<DutyAssignment[]>([
-  { aircraft: 'G450', crewIds: ['CREW-A-PIC', 'CREW-A-SIC', 'CREW-A-CC'], dateIndex: 0, from: 'ZSPD', id: 'DUTY-01', sta: '1620', state: 'confirmed', std: '1330', tail: 'B-9308', to: 'ZGGG', type: 'PAX' },
-  { aircraft: 'G650ER', crewIds: ['CREW-A-PIC', 'CREW-A-SIC', 'CREW-A-CC'], dateIndex: 1, from: 'ZGGG', id: 'DUTY-02', sta: '1040', state: 'confirmed', std: '0820', tail: 'B-602M', to: 'ZGSZ', type: 'PAX' },
-  { aircraft: 'G650ER', crewIds: ['CREW-B-PIC', 'CREW-B-SIC', 'CREW-B-CC'], dateIndex: 0, from: 'ZUUU', id: 'DUTY-03', sta: '1530', state: 'confirmed', std: '1100', tail: 'B-602M', to: 'ZSPD', type: 'FERRY' },
-  { aircraft: 'G650ER', crewIds: ['CREW-B-PIC', 'CREW-B-SIC', 'CREW-B-CC'], dateIndex: 2, from: 'ZSPD', id: 'DUTY-04', sta: '1710', state: 'draft', std: '1420', tail: 'B-9811', to: 'ZBAA', type: 'PAX' },
-  { aircraft: 'G550', crewIds: ['CREW-C-PIC', 'CREW-C-SIC', 'CREW-C-CC'], dateIndex: 1, from: 'ZSPD', id: 'DUTY-05', sta: '1800', state: 'conflict', std: '1000', tail: 'B-801Q', to: 'ZSPD', type: 'PAX' },
+  { aircraft: 'G450', crewIds: ['CREW-A-PIC', 'CREW-A-SIC', 'CREW-A-CC'], dateIndex: 0, from: 'ZSPD', id: 'DUTY-01', rosterStatus: 'official', sta: '1620', state: 'confirmed', std: '1330', tail: 'B-9308', to: 'ZGGG', type: 'PAX' },
+  { aircraft: 'G650ER', crewIds: ['CREW-A-PIC', 'CREW-A-SIC', 'CREW-A-CC'], dateIndex: 1, from: 'ZGGG', id: 'DUTY-02', rosterStatus: 'official', sta: '1040', state: 'confirmed', std: '0820', tail: 'B-602M', to: 'ZGSZ', type: 'PAX' },
+  { aircraft: 'G650ER', crewIds: ['CREW-B-PIC', 'CREW-B-SIC', 'CREW-B-CC'], dateIndex: 0, from: 'ZUUU', id: 'DUTY-03', rosterStatus: 'official', sta: '1530', state: 'confirmed', std: '1100', tail: 'B-602M', to: 'ZSPD', type: 'FERRY' },
+  { aircraft: 'G650ER', crewIds: ['CREW-B-PIC', 'CREW-B-SIC', 'CREW-B-CC'], dateIndex: 2, from: 'ZSPD', id: 'DUTY-04', rosterStatus: 'preliminary', sta: '1710', state: 'draft', std: '1420', tail: 'B-9811', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'G550', crewIds: ['CREW-C-PIC', 'CREW-C-SIC', 'CREW-C-CC'], dateIndex: 1, from: 'ZSPD', id: 'DUTY-05', rosterStatus: 'preliminary', sta: '1800', state: 'conflict', std: '1000', tail: 'B-801Q', to: 'ZSPD', type: 'PAX' },
 ]);
 
 const unassignedFlights = ref<UnassignedFlight[]>([
@@ -160,6 +183,7 @@ const qualificationFilter = ref('全部资质');
 const registrationFilter = ref('全部注册号');
 const crewSearch = ref('');
 const stateFilter = ref('全部状态');
+const rosterStatusFilter = ref<RosterStatusFilter>('all');
 const selectedCrewId = ref('all');
 const selectedItemId = ref('');
 const rosterWorkspaceRef = ref<HTMLElement>();
@@ -168,10 +192,11 @@ const targetSicId = ref('CREW-D-SIC');
 const targetCabinId = ref('CREW-D-CC');
 const inspectorOpen = ref(false);
 const leavePanelOpen = ref(false);
+const smsPanelOpen = ref(false);
 const leaveApplicantId = ref('CREW-D-PIC');
 const leaveStart = ref('2026-08-29');
 const leaveEnd = ref('2026-08-31');
-const leaveReason = ref('年假');
+const leaveReason = ref<ManualEventType>('请休假');
 const assignmentWorkspaceOpen = ref(false);
 const rosterUnit = ref<RosterUnit>('trip');
 const selectedRosterFlightIds = ref<string[]>([]);
@@ -183,13 +208,29 @@ const leaveRequests = ref([
   { applicant: '陈昊', created: '8月21日 09:12', end: '8月24日', id: 'LEAVE-01', reason: '年假', start: '8月23日', status: '待审批' },
   { applicant: '许静', created: '8月20日 16:40', end: '8月27日', id: 'LEAVE-02', reason: '调休', start: '8月27日', status: '已批准' },
 ]);
+const manualEvents = ref<ManualRosterEvent[]>([
+  { crewId: 'CREW-D-PIC', dateIndex: 1, end: '1800', id: 'EVENT-01', note: 'G650ER 复训', start: '0900', type: '训练' },
+  { crewId: 'CREW-D-CC', dateIndex: 2, end: '2359', id: 'EVENT-02', note: '年假', start: '0000', type: '请休假' },
+  { crewId: 'CREW-E-INSPECTOR', dateIndex: 4, end: '1800', id: 'EVENT-03', note: '外借支援', start: '0800', type: '借用' },
+  { crewId: 'CREW-C-PIC', dateIndex: 3, end: '2359', id: 'EVENT-04', note: '医学观察', start: '0000', type: '停飞' },
+]);
+const smsAutoSend = ref(true);
+const smsConfirmBeforeSend = ref(true);
+const officialRosterSmsTemplate = '【Starjet】{姓名}，您已正式排班：{日期}{起飞时间} {注册号} {航段}，请于{日期+提前时间}前抵达机场，请提前确认护照、签证及执勤准备。';
+const smsRules = ref<SmsRule[]>([
+  { advanceHours: 3, enabled: true, key: 'international-charter', label: '国际包机', template: officialRosterSmsTemplate },
+  { advanceHours: 2, enabled: true, key: 'domestic-charter', label: '国内包机', template: officialRosterSmsTemplate },
+  { advanceHours: 1, enabled: true, key: 'international-ferry', label: '国际调机', template: officialRosterSmsTemplate },
+  { advanceHours: 1, enabled: true, key: 'domestic-ferry', label: '国内调机', template: officialRosterSmsTemplate },
+]);
 
 const registrationOptions = computed(() => [...new Set([
   ...assignments.value.map((item) => item.tail),
   ...unassignedFlights.value.map((item) => item.tail),
 ])].sort());
 const filteredAssignments = computed(() => assignments.value.filter((item) =>
-  registrationFilter.value === '全部注册号' || item.tail === registrationFilter.value,
+  (registrationFilter.value === '全部注册号' || item.tail === registrationFilter.value) &&
+  (rosterStatusFilter.value === 'all' || item.rosterStatus === rosterStatusFilter.value),
 ));
 const visibleUnassignedFlights = computed(() => unassignedFlights.value.filter((item) =>
   registrationFilter.value === '全部注册号' || item.tail === registrationFilter.value,
@@ -204,7 +245,9 @@ const visibleCrew = computed(() => crewMembers.filter((member) =>
 ));
 const selectedAssignment = computed(() => filteredAssignments.value.find((item) => item.id === selectedItemId.value));
 const selectedOpenFlight = computed(() => visibleUnassignedFlights.value.find((item) => item.id === selectedItemId.value));
-const hasSelectedFlight = computed(() => Boolean(selectedAssignment.value || selectedOpenFlight.value));
+const selectedManualEvent = computed(() => manualEvents.value.find((item) => item.id === selectedItemId.value));
+const selectedManualEventCrew = computed(() => crewMembers.find((member) => member.id === selectedManualEvent.value?.crewId));
+const hasSelectedFlight = computed(() => Boolean(selectedAssignment.value || selectedOpenFlight.value || selectedManualEvent.value));
 const selectedAssignmentCrew = computed(() => crewMembers.filter((member) =>
   selectedAssignment.value?.crewIds.includes(member.id),
 ));
@@ -291,6 +334,20 @@ function assignmentsForCrew(crewId: string) {
   return filteredAssignments.value.filter((item) => item.crewIds.includes(crewId));
 }
 
+function manualEventsForCrew(crewId: string) {
+  return manualEvents.value.filter((item) => item.crewId === crewId);
+}
+
+function manualEventStyle(item: ManualRosterEvent): CSSProperties {
+  const start = minutes(item.start);
+  const duration = Math.max(90, minutes(item.end) - start);
+  const dayWidth = 100 / dates.length;
+  return {
+    left: `${item.dateIndex * dayWidth + (start / 1440) * dayWidth}%`,
+    width: `${(duration / 1440) * dayWidth}%`,
+  };
+}
+
 function crewRoleLabel(role: CrewRole) {
   return crewRoleLabels[role];
 }
@@ -335,12 +392,13 @@ function confirmRosterAssignment() {
       ...flight,
       crewIds,
       id: `DUTY-${String(assignments.value.length + 1).padStart(2, '0')}`,
+      rosterStatus: 'preliminary',
       state: 'draft',
     });
   });
   const assignedIds = new Set(selectedRosterFlights.value.map((flight) => flight.id));
   unassignedFlights.value = unassignedFlights.value.filter((flight) => !assignedIds.has(flight.id));
-  ElMessage.success(`已批量分配 ${assignedIds.size} 个航班，执行人员：${selectedRosterCrew.value.map((member) => member.name).join('、')}`);
+  ElMessage.success(`已创建 ${assignedIds.size} 个预排班，执行人员：${selectedRosterCrew.value.map((member) => member.name).join('、')}`);
   selectedRosterFlightIds.value = [];
   if (!rosterTargets.value.length) closeAssignmentWorkspace();
 }
@@ -379,6 +437,7 @@ function assignOpenFlight() {
     ...flight,
     crewIds,
     id: `DUTY-${String(assignments.value.length + 1).padStart(2, '0')}`,
+    rosterStatus: 'preliminary',
     state: crew.some((member) => member.state === 'conflict') ? 'conflict' : 'draft',
   });
   unassignedFlights.value = unassignedFlights.value.filter((item) => item.id !== flight.id);
@@ -398,7 +457,82 @@ function submitLeaveRequest() {
     start: leaveStart.value.replace('2026-', '').replace('-', '月') + '日',
     status: '待审批',
   });
-  ElMessage.success(`已提交 ${applicant.name} 的请假申请`);
+  const eventDateIndex = Math.max(0, dates.findIndex((date) => date.iso === leaveStart.value));
+  manualEvents.value.push({
+    crewId: applicant.id,
+    dateIndex: eventDateIndex,
+    end: '1800',
+    id: `EVENT-${String(manualEvents.value.length + 1).padStart(2, '0')}`,
+    note: leaveReason.value === '请休假' ? '请休假事项' : `${leaveReason.value}安排`,
+    start: '0800',
+    type: leaveReason.value,
+  });
+  ElMessage.success(`已添加 ${applicant.name} 的${leaveReason.value}事项`);
+}
+
+function rosterSmsCategory(item: DutyAssignment): SmsRuleKey {
+  const internationalAirports = new Set(['KSFO', 'RJBB', 'RJGG', 'RJTT', 'VHHH', 'VMMC', 'VTBS', 'WSSS']);
+  const international = internationalAirports.has(item.from) || internationalAirports.has(item.to);
+  if (item.type === 'FERRY') return international ? 'international-ferry' : 'domestic-ferry';
+  return international ? 'international-charter' : 'domestic-charter';
+}
+
+function reportingDeadline(item: DutyAssignment, advanceHours: number) {
+  const isoDate = dates[item.dateIndex]?.iso;
+  if (!isoDate || !/^\d{4}$/.test(item.std)) return '—';
+  const hours = Number(item.std.slice(0, 2));
+  const minutes = Number(item.std.slice(2));
+  const departure = new Date(`${isoDate}T00:00:00Z`);
+  departure.setUTCHours(hours, minutes, 0, 0);
+  departure.setUTCMinutes(departure.getUTCMinutes() - advanceHours * 60);
+  const month = departure.getUTCMonth() + 1;
+  const day = departure.getUTCDate();
+  const time = `${String(departure.getUTCHours()).padStart(2, '0')}${String(departure.getUTCMinutes()).padStart(2, '0')}Z`;
+  return `${month}月${day}日 ${time}`;
+}
+
+function renderRosterSms(template: string, item: DutyAssignment, crewName: string, advanceHours: number) {
+  const date = dates[item.dateIndex]?.date || '—';
+  const values: Record<string, string> = {
+    '{姓名}': crewName,
+    '{日期}': date,
+    '{起飞时间}': `${item.std}Z`,
+    '{注册号}': item.tail,
+    '{航段}': `${item.from} → ${item.to}`,
+    '{日期+提前时间}': reportingDeadline(item, advanceHours),
+  };
+  return Object.entries(values).reduce((message, [variable, value]) => message.replaceAll(variable, value), template);
+}
+
+function smsRulePreview(rule: SmsRule) {
+  const international = rule.key.startsWith('international');
+  const ferry = rule.key.endsWith('ferry');
+  const sample = {
+    dateIndex: 1,
+    from: 'ZSPD',
+    std: '0820',
+    tail: ferry ? 'B-602M' : 'B-9308',
+    to: international ? 'RJTT' : 'ZGGG',
+    type: ferry ? 'FERRY' : 'PAX',
+  } as DutyAssignment;
+  return renderRosterSms(rule.template, sample, crewMembers[0]?.name || '张铭', rule.advanceHours);
+}
+
+function publishSelectedRoster() {
+  const item = selectedAssignment.value;
+  if (!item || item.state === 'conflict') return;
+  item.rosterStatus = 'official';
+  item.state = 'confirmed';
+  const rule = smsRules.value.find((candidate) => candidate.key === rosterSmsCategory(item));
+  const message = smsAutoSend.value && rule?.enabled
+    ? `，已按“${rule.label}”规则向 ${item.crewIds.length} 名机组推送短信（提前 ${rule.advanceHours} 小时到场）`
+    : '，短信自动推送未启用';
+  ElMessage.success(`已转为正式排班${message}`);
+}
+
+function saveSmsRules() {
+  smsPanelOpen.value = false;
+  ElMessage.success('短信推送规则已保存');
 }
 </script>
 
@@ -461,7 +595,7 @@ function submitLeaveRequest() {
             <p v-if="!rosterCrewCandidates.length">没有匹配的人员</p>
           </div>
           <div v-if="rosterHasConflict || rosterRolesComplete" :class="['validation-message', rosterHasConflict ? 'blocked' : 'ready']"><AlertIcon v-if="rosterHasConflict" /><span v-else>✓</span><div><strong>{{ rosterHasConflict ? '存在执勤冲突' : '岗位配置完整' }}</strong><small>{{ rosterHasConflict ? '请移除标记为受阻的机组成员。' : '已包含责任机长、副驾驶和乘务员。' }}</small></div></div>
-          <footer class="assignment-footer"><div class="selected-crew-summary"><strong>已选 <b>{{ selectedRosterCrew.length }}</b> 人</strong><span v-if="selectedRosterCrew.length">{{ selectedRosterCrew.map((member) => member.name).join('、') }}</span></div><div class="assignment-footer-actions"><button class="secondary-action" type="button" @click="closeAssignmentWorkspace">取消</button><button :disabled="!canConfirmRoster" class="primary-action" type="button" @click="confirmRosterAssignment">确认分配</button></div></footer>
+          <footer class="assignment-footer"><div class="selected-crew-summary"><strong>已选 <b>{{ selectedRosterCrew.length }}</b> 人</strong><span v-if="selectedRosterCrew.length">{{ selectedRosterCrew.map((member) => member.name).join('、') }}</span></div><div class="assignment-footer-actions"><button class="secondary-action" type="button" @click="closeAssignmentWorkspace">取消</button><button :disabled="!canConfirmRoster" class="primary-action" type="button" @click="confirmRosterAssignment">创建预排班</button></div></footer>
         </aside>
       </div>
       <div v-else class="assignment-empty"><ClipboardIcon /><strong>当前没有待排任务</strong><span>新增航班后可在这里按行程或航班分配机组。</span></div>
@@ -482,11 +616,19 @@ function submitLeaveRequest() {
       <label><span>基地</span><select v-model="baseFilter"><option>全部基地</option><option>ZSPD</option><option>ZBAA</option><option>ZGGG</option></select></label>
       <label><span>资质</span><select v-model="qualificationFilter"><option>全部资质</option><option>G650ER</option><option>G450</option><option>G550</option></select></label>
       <label><span>状态</span><select v-model="stateFilter"><option>全部状态</option><option>可用</option><option>需关注</option><option>受阻</option><option>休息中</option></select></label>
+      <div class="roster-status-switch" aria-label="排班状态" role="group"><button :class="{ active: rosterStatusFilter === 'all' }" type="button" @click="rosterStatusFilter = 'all'">全部</button><button :class="{ active: rosterStatusFilter === 'preliminary' }" type="button" @click="rosterStatusFilter = 'preliminary'">预排</button><button :class="{ active: rosterStatusFilter === 'official' }" type="button" @click="rosterStatusFilter = 'official'">正式</button></div>
       <div class="date-control"><button aria-label="前一天" type="button"><ChevronLeftIcon /></button><strong>2026年8月21日 — 8月27日</strong><button aria-label="后一天" type="button"><ChevronRightIcon /></button></div>
-      <div class="filter-actions"><button class="secondary-action" type="button" @click="leavePanelOpen = true"><CalendarOffIcon />请休假</button></div>
+      <div class="filter-actions"><button class="secondary-action" type="button" @click="smsPanelOpen = true">短信配置</button><button class="secondary-action" type="button" @click="leavePanelOpen = true"><CalendarOffIcon />人员事项</button></div>
     </section>
 
     <section ref="rosterWorkspaceRef" :class="['roster-workspace', { 'has-inspector': hasSelectedFlight }]" aria-label="机组排班工作区" tabindex="0" @wheel="onScheduleWheel">
+      <header class="schedule-legend roster-table-legend" aria-label="排班图例">
+        <span><i class="confirmed"></i>正式</span>
+        <span><i class="draft"></i>预排</span>
+        <span><i class="conflict"></i>冲突</span>
+        <span><i class="manual"></i>人工事项</span>
+        <small>按住 Shift 滚动鼠标滚轮查看日期 · 点击任务查看执勤详情</small>
+      </header>
       <aside class="crew-rail" aria-label="人员资源">
         <header class="crew-search"><input v-model="crewSearch" aria-label="搜索机组成员" placeholder="搜索姓名或岗位" type="search" /><small>{{ visibleCrew.length }} 人</small></header>
         <button
@@ -509,23 +651,42 @@ function submitLeaveRequest() {
           <section v-for="member in visibleCrew" :key="member.id" :class="['schedule-row', { dimmed: selectedCrewId !== 'all' && selectedCrewId !== member.id }]">
             <div class="time-grid" :style="{ gridTemplateColumns: `repeat(${dates.length * 4}, 1fr)` }" aria-hidden="true"><template v-for="date in dates" :key="date.iso"><span v-for="n in 4" :key="n"></span></template></div>
             <button v-for="item in assignmentsForCrew(member.id)" :key="item.id" :class="['duty-card', item.state, { selected: selectedItemId === item.id }]" :style="assignmentStyle(item)" :aria-label="`${member.name} ${member.role} ${item.type} ${item.tail} ${item.from} ${item.std}Z 至 ${item.to} ${item.sta}Z`" type="button" @click="selectItem(item.id)">
-              <span><b>{{ item.type }}</b><strong>{{ item.tail }}</strong></span>
+              <span><b>{{ item.type }}</b><strong>{{ item.tail }}</strong><i :class="item.rosterStatus">{{ item.rosterStatus === 'official' ? '正式' : '预排' }}</i></span>
               <em>{{ item.from }} → {{ item.to }}</em>
               <time>{{ item.std }}Z–{{ item.sta }}Z</time>
             </button>
+            <button
+              v-for="event in manualEventsForCrew(member.id)"
+              :key="event.id"
+              :aria-label="`${member.name} ${event.type} ${dates[event.dateIndex]?.date} ${event.start} 至 ${event.end} ${event.note}`"
+              :class="['manual-duty-card', event.type, { selected: selectedItemId === event.id }]"
+              :style="manualEventStyle(event)"
+              type="button"
+              @click="selectItem(event.id)"
+            >
+              <b>{{ event.type }}</b><strong>{{ event.note }}</strong><time>{{ event.start }}–{{ event.end }}</time>
+            </button>
           </section>
         </div>
-        <footer class="schedule-legend"><span><i class="confirmed"></i>已确认</span><span><i class="draft"></i>待确认</span><span><i class="conflict"></i>冲突</span><small>按住 Shift 滚动鼠标滚轮查看日期 · 点击任务查看执勤详情</small></footer>
       </section>
 
       <aside v-if="hasSelectedFlight" :class="['roster-inspector', { open: inspectorOpen }]" aria-label="排班检查器">
-        <header><div><span>ROSTER INSPECTOR</span><strong>{{ selectedOpenFlight ? '待分配航班' : '执勤详情' }}</strong></div><button aria-label="关闭排班检查器" type="button" @click="closeInspector"><CloseIcon /></button></header>
+        <header><div><span>ROSTER INSPECTOR</span><strong>{{ selectedManualEvent ? '人员事项详情' : selectedOpenFlight ? '待分配航班' : '执勤详情' }}</strong></div><button aria-label="关闭排班检查器" type="button" @click="closeInspector"><CloseIcon /></button></header>
         <template v-if="selectedAssignment">
-          <section class="flight-identity"><span><b>{{ selectedAssignment.type }}</b>{{ selectedAssignment.tail }}</span><strong>{{ selectedAssignment.from }} → {{ selectedAssignment.to }}</strong><time>{{ dates[selectedAssignment.dateIndex]?.date }} · {{ selectedAssignment.std }}Z–{{ selectedAssignment.sta }}Z</time></section>
+          <section class="flight-identity"><span><b>{{ selectedAssignment.type }}</b>{{ selectedAssignment.tail }} · {{ selectedAssignment.rosterStatus === 'official' ? '正式排班' : '预排班' }}</span><strong>{{ selectedAssignment.from }} → {{ selectedAssignment.to }}</strong><time>{{ dates[selectedAssignment.dateIndex]?.date }} · {{ selectedAssignment.std }}Z–{{ selectedAssignment.sta }}Z</time></section>
           <section class="inspector-section"><h3>执行人员</h3><div class="assigned-crew"><span v-for="member in selectedAssignmentCrew" :key="member.id"><b>{{ crewRoleLabel(member.role) }}</b><strong>{{ member.name }}</strong><em>{{ member.base }}</em></span></div></section>
           <section class="inspector-section"><h3>关键限制</h3><dl class="limit-list"><div><dt>最高累计执勤</dt><dd>{{ maximumDutyHours }}</dd></div><div><dt>最低休息</dt><dd>10:00</dd></div></dl></section>
           <section v-if="selectedAssignment.state !== 'confirmed'" class="alert-panel"><AlertIcon /><div><strong>{{ selectedAssignment.state === 'conflict' ? '执勤冲突' : '等待排班确认' }}</strong><span>{{ selectedAssignment.state === 'conflict' ? '预计执勤时间超过限制，需要更换机组。' : '机组成员尚未全部确认本次任务。' }}</span></div></section>
-          <footer><button class="secondary-action" type="button">调整机组</button><button class="primary-action" type="button">确认排班</button></footer>
+          <footer><button class="secondary-action" type="button" @click="smsPanelOpen = true">短信规则</button><button :disabled="selectedAssignment.rosterStatus === 'official' || selectedAssignment.state === 'conflict'" class="primary-action" type="button" @click="publishSelectedRoster">{{ selectedAssignment.rosterStatus === 'official' ? '已正式' : '转为正式并推送' }}</button></footer>
+        </template>
+        <template v-else-if="selectedManualEvent">
+          <section :class="['event-identity', selectedManualEvent.type]">
+            <span><b>{{ selectedManualEvent.type }}</b>{{ selectedManualEventCrew?.name }}</span>
+            <strong>{{ selectedManualEvent.note }}</strong>
+            <time>{{ dates[selectedManualEvent.dateIndex]?.date }} · {{ selectedManualEvent.start }}–{{ selectedManualEvent.end }}</time>
+          </section>
+          <section class="inspector-section"><h3>人员信息</h3><dl class="event-detail-list"><div><dt>姓名</dt><dd>{{ selectedManualEventCrew?.name }}</dd></div><div><dt>岗位</dt><dd>{{ selectedManualEventCrew ? crewRoleLabel(selectedManualEventCrew.role) : '—' }}</dd></div><div><dt>基地</dt><dd>{{ selectedManualEventCrew?.base || '—' }}</dd></div></dl></section>
+          <section class="inspector-section"><h3>事项安排</h3><dl class="event-detail-list"><div><dt>类型</dt><dd>{{ selectedManualEvent.type }}</dd></div><div><dt>日期</dt><dd>{{ dates[selectedManualEvent.dateIndex]?.date }}</dd></div><div><dt>时间</dt><dd>{{ selectedManualEvent.start }}–{{ selectedManualEvent.end }}</dd></div><div><dt>备注</dt><dd>{{ selectedManualEvent.note }}</dd></div></dl></section>
         </template>
         <template v-else-if="selectedOpenFlight">
           <section class="flight-identity pending"><span><b>{{ selectedOpenFlight.type }}</b>{{ selectedOpenFlight.tail }}</span><strong>{{ selectedOpenFlight.from }} → {{ selectedOpenFlight.to }}</strong><time>{{ selectedOpenFlight.date }} · {{ selectedOpenFlight.std }}Z–{{ selectedOpenFlight.sta }}Z</time></section>
@@ -540,17 +701,36 @@ function submitLeaveRequest() {
     </template>
 
     <div v-if="leavePanelOpen" class="leave-overlay" role="presentation" @click.self="leavePanelOpen = false">
-      <section aria-label="请休假管理" aria-modal="true" class="leave-panel" role="dialog">
-        <header><div><span>LEAVE CONTROL</span><strong>请休假管理</strong></div><button aria-label="关闭请休假管理" type="button" @click="leavePanelOpen = false"><CloseIcon /></button></header>
-        <div class="leave-form"><label><span>申请人</span><select v-model="leaveApplicantId"><option v-for="member in crewMembers" :key="member.id" :value="member.id">{{ member.name }} · {{ crewRoleLabel(member.role) }} · {{ member.base }}</option></select></label><label><span>开始日期</span><input v-model="leaveStart" type="date" /></label><label><span>结束日期</span><input v-model="leaveEnd" type="date" /></label><label><span>请假类型</span><select v-model="leaveReason"><option>年假</option><option>调休</option><option>病假</option><option>事假</option></select></label><button class="primary-action" type="button" @click="submitLeaveRequest">提交申请</button></div>
+      <section aria-label="人员事项管理" aria-modal="true" class="leave-panel" role="dialog">
+        <header><div><span>CREW EVENT</span><strong>人员事项</strong></div><button aria-label="关闭人员事项" type="button" @click="leavePanelOpen = false"><CloseIcon /></button></header>
+        <div class="leave-form"><label><span>人员</span><select v-model="leaveApplicantId"><option v-for="member in crewMembers" :key="member.id" :value="member.id">{{ member.name }} · {{ crewRoleLabel(member.role) }} · {{ member.base }}</option></select></label><label><span>开始日期</span><input v-model="leaveStart" type="date" /></label><label><span>结束日期</span><input v-model="leaveEnd" type="date" /></label><label><span>事项类型</span><select v-model="leaveReason"><option>训练</option><option>请休假</option><option>停飞</option><option>借用</option></select></label><button class="primary-action" type="button" @click="submitLeaveRequest">添加到排班</button></div>
         <div class="leave-list"><header><strong>申请记录</strong><small>{{ leaveRequests.length }} 条</small></header><article v-for="request in leaveRequests" :key="request.id"><span><strong>{{ request.applicant }}</strong><b>{{ request.reason }}</b></span><time>{{ request.start }} — {{ request.end }}</time><small>提交于 {{ request.created }}</small><em :class="request.status === '已批准' ? 'approved' : 'pending'"><i></i>{{ request.status }}</em></article></div>
+      </section>
+    </div>
+
+    <div v-if="smsPanelOpen" class="leave-overlay" role="presentation" @click.self="smsPanelOpen = false">
+      <section aria-label="短信推送配置" aria-modal="true" class="leave-panel sms-panel" role="dialog">
+        <header><div><span>SMS RULES</span><strong>正式排班短信配置</strong></div><button aria-label="关闭短信配置" type="button" @click="smsPanelOpen = false"><CloseIcon /></button></header>
+        <div class="sms-options"><label><input v-model="smsAutoSend" type="checkbox" /><span><strong>转为正式时自动推送</strong><small>仅在对应航班类型规则启用时发送</small></span></label><label><input v-model="smsConfirmBeforeSend" type="checkbox" /><span><strong>发送前二次确认</strong><small>正式发布前展示接收人和短信预览</small></span></label></div>
+        <div class="sms-rule-list">
+          <article v-for="rule in smsRules" :key="rule.key">
+            <header><label><input v-model="rule.enabled" type="checkbox" /><strong>{{ rule.label }}</strong></label><span>{{ rule.enabled ? '已启用' : '未启用' }}</span></header>
+            <div class="sms-rule-settings">
+              <label class="sms-advance-setting"><span>提前到场</span><input v-model.number="rule.advanceHours" :aria-label="`${rule.label}提前到场小时数`" max="12" min="0" step="0.5" type="number" /><em>小时</em></label>
+            </div>
+            <textarea v-model="rule.template" :disabled="!rule.enabled" :aria-label="`${rule.label}短信模板`" rows="4"></textarea>
+            <small>可用变量：{姓名}、{日期}、{起飞时间}、{注册号}、{航段}、{日期+提前时间}</small>
+            <div class="sms-preview"><span>短信预览</span><p>{{ smsRulePreview(rule) }}</p></div>
+          </article>
+        </div>
+        <footer><button class="secondary-action" type="button" @click="smsPanelOpen = false">取消</button><button class="primary-action" type="button" @click="saveSmsRules">保存配置</button></footer>
       </section>
     </div>
   </main>
 </template>
 
 <style scoped>
-.crew-roster-page { --roster-filter-sticky-height: calc(var(--sj-control-dense) + var(--sj-space-6)); position: relative; display: flex; height: var(--vben-content-height, 100dvh); min-height: 0; flex-direction: column; overflow: hidden; color: var(--sj-text-1); background: var(--sj-canvas); font-family: var(--sj-font-ui); }
+.crew-roster-page { --roster-filter-sticky-height: calc(var(--sj-control-dense) + var(--sj-space-6)); --roster-legend-height: 40px; position: relative; display: flex; height: var(--vben-content-height, 100dvh); min-height: 0; flex-direction: column; overflow: hidden; color: var(--sj-text-1); background: var(--sj-canvas); font-family: var(--sj-font-ui); }
 button, select { font: inherit; }
 button { cursor: pointer; }
 .date-control { display: flex; align-items: center; gap: var(--sj-space-2); }.date-control strong { min-width: 190px; font: 700 12px var(--sj-font-data); text-align: center; }.date-control button, .roster-inspector header button { display: grid; width: var(--sj-control-default); height: var(--sj-control-default); place-items: center; border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-2); background: var(--sj-surface-2); }.date-control svg, .roster-inspector header svg { width: 15px; }
@@ -562,10 +742,10 @@ button { cursor: pointer; }
 .filter-bar { z-index: 18; display: flex; min-height: var(--roster-filter-sticky-height); flex: 0 0 auto; padding: var(--sj-space-2) var(--sj-space-4); align-items: center; gap: var(--sj-space-3); border-bottom: 1px solid var(--sj-border); background: var(--sj-surface-2); }.filter-bar label { display: grid; width: 148px; gap: 2px; }.filter-bar label span { color: var(--sj-text-3); font-size: 9px; }.filter-bar select, .crew-select select { width: 100%; min-height: var(--sj-control-dense); padding: 0 var(--sj-space-3); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-1); background: var(--sj-surface-1); font-size: 11px; }
 .roster-workspace { display: grid; min-height: 0; flex: 1; align-items: start; grid-template-columns: 244px minmax(0, 1fr); overflow: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--sj-border); scrollbar-color: var(--sj-border-strong) var(--sj-surface-1); }.roster-workspace.has-inspector { grid-template-columns: 244px minmax(0, 1fr); }.roster-workspace:focus-visible { outline: 2px solid var(--sj-blue); outline-offset: -2px; }
 .crew-rail { position: sticky; z-index: 9; left: 0; min-width: 0; min-height: 100%; border-right: 1px solid var(--sj-border); background: var(--sj-surface-1); }.crew-rail > header, .open-flight-strip > header, .roster-inspector > header { display: flex; min-height: 58px; padding: 0 var(--sj-space-4); align-items: center; justify-content: space-between; border-bottom: 1px solid var(--sj-border); }.crew-rail header div, .open-flight-strip header div, .roster-inspector header div { display: grid; }.crew-rail header span, .open-flight-strip header span, .roster-inspector header span { color: var(--sj-blue); font: 8px var(--sj-font-data); letter-spacing: .11em; }.crew-rail header strong, .open-flight-strip header strong, .roster-inspector header strong { font-size: 13px; }.crew-rail header small, .open-flight-strip header small { color: var(--sj-text-3); font: 9px var(--sj-font-data); }
-.crew-search { position: sticky; top: 0; z-index: 12; gap: var(--sj-space-2); background: var(--sj-surface-1); }.crew-search input { min-width: 0; height: var(--sj-control-dense); flex: 1; padding: 0 var(--sj-space-3); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-1); background: var(--sj-canvas); font-size: 10px; }.crew-search input::placeholder { color: var(--sj-text-3); }
+.crew-search { position: sticky; top: var(--roster-legend-height); z-index: 12; gap: var(--sj-space-2); background: var(--sj-surface-1); }.crew-search input { min-width: 0; height: var(--sj-control-dense); flex: 1; padding: 0 var(--sj-space-3); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-1); background: var(--sj-canvas); font-size: 10px; }.crew-search input::placeholder { color: var(--sj-text-3); }
 .crew-card { display: grid; width: 100%; min-height: 82px; padding: 0 var(--sj-space-4); align-items: center; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--sj-space-2); border: 0; border-bottom: 1px solid var(--sj-border); color: var(--sj-text-1); text-align: left; background: transparent; }.crew-card:hover, .crew-card.selected { background: var(--sj-surface-3); }.crew-card.selected { box-shadow: inset 2px 0 var(--sj-blue); }.crew-card > strong { overflow: hidden; font: 750 12px var(--sj-font-data); text-overflow: ellipsis; white-space: nowrap; }.crew-card > b { padding: 1px var(--sj-space-1); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-tag); color: var(--sj-blue); font: 750 8px var(--sj-font-data); white-space: nowrap; }.crew-card > span { color: var(--sj-text-3); font: 8px var(--sj-font-data); white-space: nowrap; }
-.schedule-canvas { min-width: 0; overflow: visible; background: var(--sj-canvas); }.schedule-axis { position: sticky; top: 0; z-index: 10; display: grid; min-width: 660px; height: 58px; grid-template-columns: repeat(3, minmax(220px, 1fr)); border-bottom: 1px solid var(--sj-border); background: var(--sj-surface-1); }.schedule-axis > div { position: relative; display: flex; padding: var(--sj-space-2) var(--sj-space-3) 17px; align-items: center; gap: var(--sj-space-2); border-right: 1px solid var(--sj-border); }.schedule-axis > div.today { background: var(--sj-lime-soft); box-shadow: inset 0 -2px var(--sj-lime); }.schedule-axis strong { font: 750 11px var(--sj-font-data); }.schedule-axis .today strong { color: var(--sj-lime); }.schedule-axis span { color: var(--sj-text-3); font-size: 9px; }.schedule-axis i { position: absolute; right: 0; bottom: 3px; left: 0; display: grid; grid-template-columns: repeat(4, 1fr); font-style: normal; }.schedule-axis i b { padding-left: var(--sj-space-1); color: var(--sj-text-disabled); font: 8px var(--sj-font-data); }
-.schedule-rows { min-width: 660px; }.schedule-row { position: relative; height: 82px; border-bottom: 1px solid var(--sj-border); transition: opacity var(--sj-duration-fast); }.schedule-row.dimmed { opacity: .28; }.time-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(12, 1fr); }.time-grid span { border-right: 1px solid var(--sj-grid); }.duty-card { position: absolute; z-index: 2; top: var(--sj-space-2); bottom: var(--sj-space-2); display: grid; min-width: 118px; padding: var(--sj-space-2); align-content: center; gap: 2px; overflow: hidden; border: 1px solid var(--sj-border-strong); border-left: 3px solid var(--sj-blue); border-radius: var(--sj-radius-control); color: var(--sj-text-1); text-align: left; background: var(--sj-surface-3); }.duty-card:hover, .duty-card.selected { border-color: var(--sj-blue); box-shadow: var(--sj-shadow-selected); }.duty-card.confirmed { border-left-color: var(--sj-lime); }.duty-card.draft { border-left-color: var(--sj-amber); }.duty-card.conflict { border-left-color: var(--sj-red); background: var(--sj-red-soft); }.duty-card > span { display: flex; align-items: center; gap: var(--sj-space-2); }.duty-card span b { padding: 1px var(--sj-space-1); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-tag); color: var(--sj-text-2); font: 8px var(--sj-font-data); }.duty-card span strong { color: var(--sj-text-1); font: 750 10px var(--sj-font-data); }.duty-card em { font: 750 11px var(--sj-font-data); font-style: normal; white-space: nowrap; }.duty-card time { color: var(--sj-text-3); font: 8px var(--sj-font-data); white-space: nowrap; }.schedule-legend { display: flex; min-height: 40px; padding: 0 var(--sj-space-3); align-items: center; gap: var(--sj-space-4); color: var(--sj-text-2); font-size: 9px; }.schedule-legend span { display: inline-flex; align-items: center; gap: var(--sj-space-1); }.schedule-legend i { width: 7px; height: 7px; border-radius: 50%; }.schedule-legend .confirmed { background: var(--sj-lime); }.schedule-legend .draft { background: var(--sj-amber); }.schedule-legend .conflict { background: var(--sj-red); }.schedule-legend small { margin-left: auto; color: var(--sj-text-3); }
+.schedule-canvas { min-width: 0; overflow: visible; background: var(--sj-canvas); }.schedule-axis { position: sticky; top: var(--roster-legend-height); z-index: 10; display: grid; min-width: 660px; height: 58px; grid-template-columns: repeat(3, minmax(220px, 1fr)); border-bottom: 1px solid var(--sj-border); background: var(--sj-surface-1); }.schedule-axis > div { position: relative; display: flex; padding: var(--sj-space-2) var(--sj-space-3) 17px; align-items: center; gap: var(--sj-space-2); border-right: 1px solid var(--sj-border); }.schedule-axis > div.today { background: var(--sj-lime-soft); box-shadow: inset 0 -2px var(--sj-lime); }.schedule-axis strong { font: 750 11px var(--sj-font-data); }.schedule-axis .today strong { color: var(--sj-lime); }.schedule-axis span { color: var(--sj-text-3); font-size: 9px; }.schedule-axis i { position: absolute; right: 0; bottom: 3px; left: 0; display: grid; grid-template-columns: repeat(4, 1fr); font-style: normal; }.schedule-axis i b { padding-left: var(--sj-space-1); color: var(--sj-text-disabled); font: 8px var(--sj-font-data); }
+.schedule-rows { min-width: 660px; }.schedule-row { position: relative; height: 82px; border-bottom: 1px solid var(--sj-border); transition: opacity var(--sj-duration-fast); }.schedule-row.dimmed { opacity: .28; }.time-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(12, 1fr); }.time-grid span { border-right: 1px solid var(--sj-grid); }.duty-card { position: absolute; z-index: 2; top: var(--sj-space-2); bottom: var(--sj-space-2); display: grid; min-width: 118px; padding: var(--sj-space-2); align-content: center; gap: 2px; overflow: hidden; border: 1px solid var(--sj-border-strong); border-left: 3px solid var(--sj-blue); border-radius: var(--sj-radius-control); color: var(--sj-text-1); text-align: left; background: var(--sj-surface-3); }.duty-card:hover, .duty-card.selected { border-color: var(--sj-blue); box-shadow: var(--sj-shadow-selected); }.duty-card.confirmed { border-left-color: var(--sj-lime); }.duty-card.draft { border-left-color: var(--sj-amber); }.duty-card.conflict { border-left-color: var(--sj-red); background: var(--sj-red-soft); }.duty-card > span { display: grid; min-width: 0; align-items: center; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sj-space-1); }.duty-card span b { padding: 1px var(--sj-space-1); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-tag); color: var(--sj-text-2); font: 8px var(--sj-font-data); white-space: nowrap; }.duty-card span strong { min-width: 0; overflow: hidden; color: var(--sj-text-1); font: 750 10px var(--sj-font-data); text-overflow: ellipsis; white-space: nowrap; }.duty-card em { overflow: hidden; font: 750 11px var(--sj-font-data); font-style: normal; text-overflow: ellipsis; white-space: nowrap; }.duty-card time { color: var(--sj-text-3); font: 8px var(--sj-font-data); white-space: nowrap; }.schedule-legend { display: flex; min-height: var(--roster-legend-height); padding: 0 var(--sj-space-3); align-items: center; gap: var(--sj-space-4); color: var(--sj-text-2); font-size: 9px; }.roster-table-legend { position: sticky; z-index: 14; top: 0; grid-column: 1 / -1; border-bottom: 1px solid var(--sj-border); background: var(--sj-surface-2); }.schedule-legend span { display: inline-flex; align-items: center; gap: var(--sj-space-1); }.schedule-legend i { width: 7px; height: 7px; border-radius: 50%; }.schedule-legend .confirmed { background: var(--sj-lime); }.schedule-legend .draft { background: var(--sj-amber); }.schedule-legend .conflict { background: var(--sj-red); }.schedule-legend small { margin-left: auto; color: var(--sj-text-3); }
 .roster-inspector { position: absolute; z-index: 1000; top: 0; right: 0; bottom: 0; display: flex; width: 352px; max-width: 92vw; min-width: 0; flex-direction: column; border-left: 1px solid var(--sj-border); background: var(--sj-surface-1); box-shadow: var(--sj-shadow-panel); }.roster-inspector header button { display: grid; }.flight-identity { display: grid; padding: var(--sj-space-5); gap: var(--sj-space-2); border-bottom: 1px solid var(--sj-border); background: var(--sj-blue-soft); }.flight-identity.pending { background: var(--sj-amber-soft); }.flight-identity > span { display: flex; align-items: center; gap: var(--sj-space-2); color: var(--sj-text-2); font: 700 11px var(--sj-font-data); }.flight-identity > span b { padding: 1px var(--sj-space-1); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-tag); font-size: 8px; }.flight-identity > strong { font: 800 22px var(--sj-font-data); }.flight-identity time { color: var(--sj-text-2); font: 10px var(--sj-font-data); }.inspector-section { padding: var(--sj-space-4); border-bottom: 1px solid var(--sj-border); }.inspector-section h3 { margin: 0 0 var(--sj-space-3); color: var(--sj-text-3); font-size: 9px; letter-spacing: .08em; }.assigned-crew { display: grid; gap: var(--sj-space-2); }.assigned-crew > span { display: grid; min-height: 42px; padding: 0 var(--sj-space-3); align-items: center; grid-template-columns: 34px 1fr auto; gap: var(--sj-space-2); border-bottom: 1px solid var(--sj-border); }.assigned-crew span b { color: var(--sj-blue); font: 750 8px var(--sj-font-data); }.assigned-crew span strong { color: var(--sj-text-1); font-size: 11px; }.assigned-crew span em { color: var(--sj-text-3); font: 8px var(--sj-font-data); font-style: normal; }.limit-list { display: grid; margin: 0; gap: var(--sj-space-2); }.limit-list div { display: flex; justify-content: space-between; }.limit-list dt { color: var(--sj-text-3); font-size: 10px; }.limit-list dd { margin: 0; color: var(--sj-text-1); font: 10px var(--sj-font-data); }.alert-panel, .match-reason { display: flex; margin: var(--sj-space-4); padding: var(--sj-space-3); gap: var(--sj-space-3); border: 1px solid var(--sj-red); border-radius: var(--sj-radius-control); color: var(--sj-red); background: var(--sj-red-soft); }.match-reason { border-color: var(--sj-blue); color: var(--sj-blue); background: var(--sj-blue-soft); }.alert-panel > svg, .match-reason > svg { width: 16px; flex: 0 0 16px; }.alert-panel div, .match-reason div { display: grid; gap: var(--sj-space-1); }.alert-panel strong, .match-reason strong { font-size: 11px; }.alert-panel span, .match-reason span { color: var(--sj-text-2); font-size: 9px; line-height: 1.5; }.crew-selection-grid { display: grid; gap: var(--sj-space-3); }.crew-select { display: grid; gap: var(--sj-space-2); }.crew-select span { color: var(--sj-text-3); font-size: 9px; }.roster-inspector footer { display: flex; margin-top: auto; padding: var(--sj-space-4); gap: var(--sj-space-2); border-top: 1px solid var(--sj-border); }.roster-inspector footer button { flex: 1; }.inspector-empty { display: grid; flex: 1; place-items: center; color: var(--sj-text-3); font-size: 11px; }
 .open-flight-strip { display: grid; min-width: 0; grid-template-columns: 244px minmax(0, 1fr) 140px; border-bottom: 1px solid var(--sj-border-strong); background: var(--sj-surface-1); }.open-flight-strip > header { min-height: 72px; border-right: 1px solid var(--sj-border); border-bottom: 0; background: var(--sj-surface-2); }.open-flight-list { display: grid; min-width: 0; grid-auto-flow: column; grid-auto-columns: minmax(220px, 270px); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; scrollbar-color: var(--sj-border-strong) var(--sj-surface-1); }.open-flight-list:focus-visible { outline: 2px solid var(--sj-blue); outline-offset: -2px; }.open-flight-list > button { display: grid; min-height: 72px; padding: var(--sj-space-2) var(--sj-space-3); grid-template-columns: auto 1fr; align-content: center; gap: 2px var(--sj-space-3); border: 0; border-right: 1px solid var(--sj-border); color: var(--sj-text-1); text-align: left; background: transparent; scroll-snap-align: start; }.open-flight-list > button:hover, .open-flight-list > button.selected { background: var(--sj-surface-3); }.open-flight-list > button.selected { box-shadow: inset 0 2px var(--sj-blue); }.open-flight-list button > strong { color: var(--sj-text-1); font: 750 11px var(--sj-font-data); }.open-flight-list button em { font: 750 12px var(--sj-font-data); font-style: normal; }.open-flight-list button time { grid-column: 1 / -1; color: var(--sj-text-3); font: 8px var(--sj-font-data); }.open-flight-list > p { display: grid; min-width: 100%; min-height: 72px; margin: 0; place-items: center; color: var(--sj-text-3); font-size: 10px; }.open-flight-action { display: grid; min-height: 72px; padding: var(--sj-space-3); place-items: center; border-left: 1px solid var(--sj-border); background: var(--sj-surface-2); }.open-flight-action .primary-action { width: 100%; padding-inline: var(--sj-space-3); white-space: nowrap; }
 .open-flight-strip { flex: 0 0 auto; }
@@ -595,6 +775,94 @@ button { cursor: pointer; }
   margin-left: var(--sj-space-6);
   border-left: 1px solid var(--sj-border-strong);
 }
+.roster-status-switch {
+  display: inline-flex;
+  min-height: var(--sj-control-default);
+  padding: 2px;
+  align-self: end;
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-control);
+  background: var(--sj-canvas);
+}
+.roster-status-switch button {
+  min-width: 48px;
+  padding: 0 var(--sj-space-3);
+  border: 0;
+  border-radius: calc(var(--sj-radius-control) - 2px);
+  color: var(--sj-text-2);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+}
+.roster-status-switch button.active { color: var(--sj-text-1); background: var(--sj-surface-3); box-shadow: inset 0 -2px var(--sj-blue); }
+.duty-card > span > i { min-width: max-content; margin-left: 0; padding: 1px 4px; border: 1px solid currentColor; border-radius: var(--sj-radius-tag); font-size: 7px; font-style: normal; line-height: 1.2; white-space: nowrap; }
+.duty-card > span > i.official { color: var(--sj-lime); }
+.duty-card > span > i.preliminary { color: var(--sj-amber); }
+.manual-duty-card {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  display: grid;
+  min-width: 116px;
+  min-height: 64px;
+  padding: var(--sj-space-2);
+  overflow: hidden;
+  border: 1px solid var(--sj-blue);
+  border-left-width: 3px;
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-text-1);
+  text-align: left;
+  background: var(--sj-surface-3);
+  box-shadow: var(--sj-shadow-card);
+}
+.manual-duty-card:hover,
+.manual-duty-card.selected {
+  border-color: var(--sj-blue);
+  background: var(--sj-surface-4);
+  box-shadow: var(--sj-shadow-selected);
+}
+.manual-duty-card b { color: var(--sj-blue); font: 750 8px var(--sj-font-data); }
+.manual-duty-card strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.manual-duty-card time { color: var(--sj-text-3); font: 8px var(--sj-font-data); }
+.manual-duty-card.请休假 { border-color: var(--sj-amber); }
+.manual-duty-card.停飞 { border-color: var(--sj-red); }
+.manual-duty-card.借用 { border-color: var(--sj-purple); }
+.event-identity { display: grid; padding: var(--sj-space-5); gap: var(--sj-space-2); border-bottom: 1px solid var(--sj-border); background: var(--sj-blue-soft); }
+.event-identity > span { display: flex; align-items: center; gap: var(--sj-space-2); color: var(--sj-text-2); font: 700 11px var(--sj-font-data); }
+.event-identity > span b { padding: 1px var(--sj-space-2); border: 1px solid currentColor; border-radius: var(--sj-radius-tag); color: var(--sj-blue); font-size: 8px; }
+.event-identity > strong { color: var(--sj-text-1); font-size: 18px; line-height: 1.35; }
+.event-identity > time { color: var(--sj-text-2); font: 10px var(--sj-font-data); }
+.event-identity.请休假 { background: var(--sj-amber-soft); }.event-identity.请休假 > span b { color: var(--sj-amber); }
+.event-identity.停飞 { background: var(--sj-red-soft); }.event-identity.停飞 > span b { color: var(--sj-red); }
+.event-identity.借用 { background: var(--sj-purple-soft); }.event-identity.借用 > span b { color: var(--sj-purple); }
+.event-detail-list { display: grid; margin: 0; gap: var(--sj-space-2); }
+.event-detail-list > div { display: grid; min-height: 28px; align-items: start; grid-template-columns: 72px minmax(0, 1fr); gap: var(--sj-space-3); border-bottom: 1px solid var(--sj-border); }
+.event-detail-list > div:last-child { border-bottom: 0; }
+.event-detail-list dt { color: var(--sj-text-3); font-size: 9px; }
+.event-detail-list dd { margin: 0; color: var(--sj-text-1); font-size: 10px; line-height: 1.5; }
+.schedule-legend i.manual { background: var(--sj-blue); }
+.sms-panel { width: min(760px, 96vw); }
+.sms-options { display: grid; padding: var(--sj-space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sj-space-3); border-bottom: 1px solid var(--sj-border); }
+.sms-options label { display: flex; padding: var(--sj-space-3); align-items: flex-start; gap: var(--sj-space-2); border: 1px solid var(--sj-border); border-radius: var(--sj-radius-control); background: var(--sj-surface-2); }
+.sms-options input { margin-top: 2px; accent-color: var(--sj-lime); }
+.sms-options span { display: grid; gap: var(--sj-space-1); }
+.sms-options strong { color: var(--sj-text-1); font-size: 10px; }
+.sms-options small { color: var(--sj-text-3); font-size: 8px; }
+.sms-rule-list { min-height: 0; padding: var(--sj-space-4); overflow-y: auto; }
+.sms-rule-list article { display: grid; padding: var(--sj-space-3) 0; gap: var(--sj-space-2); border-bottom: 1px solid var(--sj-border); }
+.sms-rule-list article header { display: flex; align-items: center; justify-content: space-between; }
+.sms-rule-list article header strong { font-size: 11px; }
+.sms-rule-list article header label { display: inline-flex; align-items: center; gap: var(--sj-space-2); color: var(--sj-text-2); font-size: 9px; }
+.sms-rule-settings { display: flex; align-items: center; justify-content: flex-start; }
+.sms-advance-setting { display: inline-grid; min-height: var(--sj-control-dense); align-items: center; grid-template-columns: auto 72px auto; gap: var(--sj-space-2); color: var(--sj-text-2); font-size: 9px; }
+.sms-advance-setting input { width: 72px; min-height: var(--sj-control-dense); padding: 0 var(--sj-space-2); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-1); background: var(--sj-surface-1); font: 700 10px var(--sj-font-data); }
+.sms-advance-setting em { color: var(--sj-text-3); font-style: normal; }
+.sms-rule-list textarea { min-height: 82px; padding: var(--sj-space-3); resize: vertical; border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-1); background: var(--sj-canvas); font-size: 10px; line-height: 1.6; }
+.sms-rule-list small { color: var(--sj-text-3); font-size: 8px; }
+.sms-preview { display: grid; padding: var(--sj-space-3); gap: var(--sj-space-1); border: 1px solid var(--sj-border); border-radius: var(--sj-radius-control); background: var(--sj-surface-2); }
+.sms-preview span { color: var(--sj-blue); font: 750 8px var(--sj-font-data); letter-spacing: .08em; }
+.sms-preview p { margin: 0; color: var(--sj-text-2); font-size: 9px; line-height: 1.65; }
+.sms-panel > footer { display: flex; margin-top: auto; padding: var(--sj-space-4); justify-content: flex-end; gap: var(--sj-space-2); border-top: 1px solid var(--sj-border); }
 
 @media (max-width: 1439px) {
   .assignment-body { grid-template-columns: minmax(260px, .72fr) minmax(0, 1.48fr); }

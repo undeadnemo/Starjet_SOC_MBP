@@ -153,6 +153,32 @@ const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
           title: '付款申请 Demo',
         },
       },
+      {
+        name: 'FlightBillPreManagementDemo',
+        path: '/demo/flight-bill-pre-management',
+        component: () =>
+          import('#/views/finance/flight-bill-pre-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航班账单预管理 Demo',
+        },
+      },
+      {
+        name: 'AviationMaterialsDemo',
+        path: '/demo/aviation-materials',
+        component: () =>
+          import('#/views/materials/aviation-materials/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航材管理 Demo',
+        },
+      },
     ]
   : [];
 
@@ -303,6 +329,32 @@ const developmentPreviewRoutes: RouteRecordRaw[] = isDevelopmentPreview
           hideInTab: true,
           ignoreAccess: true,
           title: '付款申请预览',
+        },
+      },
+      {
+        name: 'FlightBillPreManagementPreview',
+        path: '/preview/flight-bill-pre-management',
+        component: () =>
+          import('#/views/finance/flight-bill-pre-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航班账单预管理预览',
+        },
+      },
+      {
+        name: 'AviationMaterialsPreview',
+        path: '/preview/aviation-materials',
+        component: () =>
+          import('#/views/materials/aviation-materials/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航材管理预览',
         },
       },
     ]

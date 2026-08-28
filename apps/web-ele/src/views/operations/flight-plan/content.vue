@@ -12,9 +12,11 @@ import {
 } from 'vue';
 import { useRouter } from 'vue-router';
 
+import { usePreferences } from '@vben/preferences';
 import {
   ArrowRightLeft,
   CircleAlert,
+  createIconifyIcon,
   Settings,
   UserRoundPen,
   X,
@@ -38,6 +40,9 @@ import {
 
 defineOptions({ name: 'FlightPlanContent' });
 
+const { isDark } = usePreferences();
+const TriangleAlertIcon = createIconifyIcon('lucide:triangle-alert');
+
 type FlightPhase =
   | 'aog'
   | 'arrived'
@@ -46,6 +51,8 @@ type FlightPhase =
   | 'preparing';
 type FlightType = 'AOG' | 'FERRY' | 'MX' | 'PAX';
 type TodoStatus = 'blocked' | 'completed' | 'pending';
+type TimeBase = 'BJ' | 'LT' | 'UTC';
+type IndicatorMode = 'icons' | 'lights' | 'shapes';
 type ViewMode = 'calendar' | 'gantt' | 'list' | 'timeline';
 
 interface FlightPlanItem {
@@ -96,7 +103,11 @@ const selectedMonth = ref(today.month() + 1);
 const selectedDay = ref(today.date());
 const aircraftFilter = ref('all');
 const typeFilter = ref('all');
+const timeBase = ref<TimeBase>('BJ');
 const timezone = ref('UTC+08:00 China/Shanghai');
+const indicatorMode = ref<IndicatorMode>('lights');
+const hoveredFlight = ref<FlightPlanItem>();
+const flightPopoverPosition = ref({ left: 0, top: 0 });
 const timelineScrollRef = ref<HTMLElement>();
 const ganttScrollRef = ref<HTMLElement>();
 const timelineHeaderTrackRef = ref<HTMLElement>();
@@ -249,7 +260,7 @@ const filteredFlights = computed(() => flights.value.filter((flight) =>
 ));
 const visibleMonthFlights = computed(() => {
   const prefix = `${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}`;
-  return filteredFlights.value.filter((flight) => flight.date.startsWith(prefix));
+  return filteredFlights.value.filter((flight) => getFlightDepartureDateTime(flight).format('YYYY-MM').startsWith(prefix));
 });
 const ganttAircrafts = computed(() => aircraftFilter.value === 'all'
   ? aircraftOptions.value
@@ -265,14 +276,20 @@ const timelineStyle = computed<CSSProperties>(() => {
       : `${(days.value.length * 100) / visibleTimelineDays.value}%`,
   };
 });
+const currentTimeInBase = computed(() => {
+  if (timeBase.value === 'UTC') return now.value.subtract(8, 'hour');
+  if (timeBase.value === 'LT') return now.value.add(getTimezoneOffsetMinutes(timezone.value) - 8 * 60, 'minute');
+  return now.value;
+});
 const currentTimeTop = computed(() => (
-  (now.value.hour() * 60 + now.value.minute() + now.value.second() / 60) / 1440
+  (currentTimeInBase.value.hour() * 60 + currentTimeInBase.value.minute() + currentTimeInBase.value.second() / 60) / 1440
 ) * 100);
-const currentTimeLabel = computed(() => now.value.format('HH:mm'));
+const currentTimeLabel = computed(() => currentTimeInBase.value.format('HH:mm'));
 const ganttCurrentTimeLeft = computed(() => {
-  const monthMatches = now.value.year() === selectedYear.value && now.value.month() + 1 === selectedMonth.value;
+  const displayNow = currentTimeInBase.value;
+  const monthMatches = displayNow.year() === selectedYear.value && displayNow.month() + 1 === selectedMonth.value;
   if (!monthMatches) return undefined;
-  const elapsedDays = now.value.date() - 1 + (now.value.hour() * 60 + now.value.minute()) / 1440;
+  const elapsedDays = displayNow.date() - 1 + (displayNow.hour() * 60 + displayNow.minute()) / 1440;
   return (elapsedDays / days.value.length) * 100;
 });
 const selectedFlightTodos = computed(() => selectedFlight.value
@@ -286,7 +303,7 @@ const selectedArrivalAirport = computed(() => selectedFlight.value
   : undefined);
 
 function flightsForDay(date: string) {
-  return visibleMonthFlights.value.filter((flight) => flight.date === date);
+  return visibleMonthFlights.value.filter((flight) => getFlightDepartureDateTime(flight).format('YYYY-MM-DD') === date);
 }
 
 function flightsForAircraft(aircraft: string) {
@@ -304,6 +321,10 @@ function getAirportInfo(code: string): AirportInfo {
 
 function getTodoStatus(status: TodoStatus) {
   return todoStatusOptions.find((item) => item.value === status) ?? todoStatusOptions[1];
+}
+
+function todoStatusSymbol(status: TodoStatus) {
+  return status === 'completed' ? '✓' : status === 'blocked' ? '×' : '!';
 }
 
 function getAircraftStyle(aircraft: string): CSSProperties {
@@ -359,7 +380,54 @@ function ensureFlightTodos(flight: FlightPlanItem) {
 }
 
 function formatFlightTime(time: string) {
-  return `${time.slice(0, 2)}:${time.slice(2)}Z`;
+  const sourceMinutes = flightTimeToMinutes(time);
+  const offset = getDisplayOffsetMinutes();
+  const value = (sourceMinutes + offset) % 1440;
+  const suffix = timeBase.value === 'UTC' ? 'Z' : ` ${timeBase.value}`;
+  return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}${suffix}`;
+}
+
+function getTimezoneOffsetMinutes(value: string) {
+  const match = value.match(/UTC([+-])(\d{2}):?(\d{2})/i);
+  if (!match) return 0;
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return match[1] === '-' ? -minutes : minutes;
+}
+
+function getDisplayOffsetMinutes(flight?: FlightPlanItem) {
+  if (timeBase.value === 'UTC') return 0;
+  if (timeBase.value === 'BJ') return 8 * 60;
+  return getTimezoneOffsetMinutes(
+    flight ? getAirportInfo(flight.from).timezone : timezone.value,
+  );
+}
+
+function getFlightDepartureDateTime(flight: FlightPlanItem) {
+  const hour = Number(flight.std.slice(0, 2));
+  const minute = Number(flight.std.slice(2));
+  return dayjs(flight.date)
+    .hour(hour)
+    .minute(minute)
+    .second(0)
+    .add(getDisplayOffsetMinutes(flight), 'minute');
+}
+
+function getFlightDisplayDate(flight: FlightPlanItem) {
+  return getFlightDepartureDateTime(flight).format('YYYY-MM-DD');
+}
+
+function showFlightPopover(flight: FlightPlanItem, event: MouseEvent | FocusEvent) {
+  const target = event.currentTarget as HTMLElement | null;
+  const rect = target?.getBoundingClientRect();
+  hoveredFlight.value = flight;
+  flightPopoverPosition.value = {
+    left: Math.min(window.innerWidth - 336, Math.max(16, rect ? rect.right + 10 : 16)),
+    top: Math.min(window.innerHeight - 230, Math.max(16, rect ? rect.top : 16)),
+  };
+}
+
+function hideFlightPopover() {
+  hoveredFlight.value = undefined;
 }
 
 function flightDuration(flight: FlightPlanItem) {
@@ -375,10 +443,15 @@ function flightTimeToMinutes(time: string) {
 
 function flightAbsoluteRange(flight: FlightPlanItem) {
   const monthStart = dayjs(`${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}-01`);
-  const dayOffset = dayjs(flight.date).startOf('day').diff(monthStart, 'day') * 1440;
-  const start = dayOffset + flightTimeToMinutes(flight.std);
+  const departure = getFlightDepartureDateTime(flight);
+  const dayOffset = departure.startOf('day').diff(monthStart, 'day') * 1440;
+  const start = dayOffset + departure.hour() * 60 + departure.minute();
   const arrivalMinute = flightTimeToMinutes(flight.sta);
-  const end = dayOffset + arrivalMinute + (arrivalMinute < flightTimeToMinutes(flight.std) ? 1440 : 0);
+  const sourceStartMinute = flightTimeToMinutes(flight.std);
+  const duration = arrivalMinute >= sourceStartMinute
+    ? arrivalMinute - sourceStartMinute
+    : 1440 - sourceStartMinute + arrivalMinute;
+  const end = start + duration;
   return { end, start };
 }
 
@@ -445,12 +518,14 @@ function getGanttOverlapRole(flight: FlightPlanItem) {
 }
 
 function getGanttBarStyle(flight: FlightPlanItem): CSSProperties {
-  const startMinute = flightTimeToMinutes(flight.std);
+  const departure = getFlightDepartureDateTime(flight);
+  const startMinute = departure.hour() * 60 + departure.minute();
   const endMinute = flightTimeToMinutes(flight.sta);
-  const duration = endMinute >= startMinute
-    ? endMinute - startMinute
-    : 1440 - startMinute + endMinute;
-  const dayIndex = dayjs(flight.date).date() - 1;
+  const sourceStartMinute = flightTimeToMinutes(flight.std);
+  const duration = endMinute >= sourceStartMinute
+    ? endMinute - sourceStartMinute
+    : 1440 - sourceStartMinute + endMinute;
+  const dayIndex = departure.date() - 1;
   const totalMinutes = days.value.length * 1440;
   return {
     ...getAircraftStyle(flight.aircraft),
@@ -483,7 +558,8 @@ function getTurnaroundLabel(flight: FlightPlanItem) {
 }
 
 function getCardStyle(flight: FlightPlanItem, index: number): CSSProperties {
-  const startMinute = Number(flight.std.slice(0, 2)) * 60 + Number(flight.std.slice(2));
+  const departure = getFlightDepartureDateTime(flight);
+  const startMinute = departure.hour() * 60 + departure.minute();
   const top = Math.max(0.8, Math.min(94, (startMinute / 1440) * 100));
   const todos = todosForFlight(flight);
   const longestTodo = Math.max(0, ...todos.map((todo) => Math.min(Array.from(todo.content).length, 15)));
@@ -757,7 +833,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flight-plan-page sj-mission-control">
+  <div :class="['flight-plan-page', 'sj-mission-control', { 'is-dark': isDark }]">
     <section class="plan-toolbar" aria-label="航班计划筛选">
       <div class="toolbar-filters">
         <label>
@@ -784,12 +860,11 @@ onBeforeUnmount(() => {
           </ElSelect>
         </label>
         <div class="toolbar-spacer"></div>
-        <label class="timezone-field">
-          <span>时区</span>
-          <ElSelect v-model="timezone" aria-label="时区">
-            <ElOption label="UTC+08:00 China/Shanghai" value="UTC+08:00 China/Shanghai" />
-            <ElOption label="UTC+00:00 UTC" value="UTC+00:00 UTC" />
-          </ElSelect>
+        <label class="time-base-field">
+          <span>时间基准</span>
+          <span class="time-base-switch" role="group" aria-label="时间基准">
+            <button v-for="base in ['LT', 'UTC', 'BJ'] as TimeBase[]" :key="base" type="button" :class="{ active: timeBase === base }" @click="timeBase = base">{{ base }}</button>
+          </span>
         </label>
         <ElButton type="primary" class="add-button" @click="addDialogVisible = true">添加航班</ElButton>
       </div>
@@ -812,6 +887,11 @@ onBeforeUnmount(() => {
           </ElSelect>
         </div>
         <ElButton class="today-button" @click="goToday">回到今天</ElButton>
+        <div class="indicator-controls" aria-label="状态标识样式">
+          <button type="button" :class="{ active: indicatorMode === 'lights' }" @click="indicatorMode = 'lights'">状态灯</button>
+          <button type="button" :class="{ active: indicatorMode === 'icons' }" @click="indicatorMode = 'icons'">图标+颜色</button>
+          <button type="button" :class="{ active: indicatorMode === 'shapes' }" @click="indicatorMode = 'shapes'">异形图标</button>
+        </div>
       </div>
     </section>
 
@@ -877,6 +957,10 @@ onBeforeUnmount(() => {
                 :style="getCardStyle(flight, index)"
                 :aria-label="`${flight.type} ${flight.aircraft}，${flight.from} ${formatFlightTime(flight.std)} 至 ${flight.to} ${formatFlightTime(flight.sta)}，${todosForFlight(flight).length} 项待办`"
                 @click="openFlight(flight)"
+                @mouseenter="showFlightPopover(flight, $event)"
+                @mouseleave="hideFlightPopover"
+                @focus="showFlightPopover(flight, $event)"
+                @blur="hideFlightPopover"
               >
                 <span class="flight-main">
                   <span class="flight-card-head">
@@ -897,10 +981,10 @@ onBeforeUnmount(() => {
                     <i :title="todo.content">{{ formatTodoForCard(todo.content) }}</i>
                     <b
                       class="todo-status-light"
-                      :class="`status-${getTodoStatus(todo.status).color}`"
                       :title="getTodoStatus(todo.status).label"
                       :aria-label="getTodoStatus(todo.status).label"
-                    ></b>
+                      :class="[{ 'with-symbol': indicatorMode !== 'lights' }, { 'color-vision': indicatorMode === 'shapes' }, `status-${getTodoStatus(todo.status).color}`]"
+                    ><TriangleAlertIcon v-if="indicatorMode === 'shapes' && todo.status === 'blocked'" aria-hidden="true" /><template v-else>{{ indicatorMode !== 'lights' ? todoStatusSymbol(todo.status) : '' }}</template></b>
                   </span>
                 </span>
               </button>
@@ -966,6 +1050,10 @@ onBeforeUnmount(() => {
                   :title="`${flight.flightNo} · ${flight.from} ${formatFlightTime(flight.std)} → ${flight.to} ${formatFlightTime(flight.sta)}`"
                   type="button"
                   @click="openFlight(flight)"
+                  @mouseenter="showFlightPopover(flight, $event)"
+                  @mouseleave="hideFlightPopover"
+                  @focus="showFlightPopover(flight, $event)"
+                  @blur="hideFlightPopover"
                 >
                   <span class="gantt-bar-head">
                     <strong class="flight-type-tag"><component :is="flightTypeIcons[flight.type]" aria-hidden="true" />{{ flight.type }}</strong>
@@ -974,9 +1062,9 @@ onBeforeUnmount(() => {
                         v-for="todo in todosForFlight(flight).slice(0, 4)"
                         :key="todo.id"
                         class="todo-status-light"
-                        :class="`status-${getTodoStatus(todo.status).color}`"
+                        :class="[{ 'with-symbol': indicatorMode !== 'lights' }, { 'color-vision': indicatorMode === 'shapes' }, `status-${getTodoStatus(todo.status).color}`]"
                         :title="`${todo.content} · ${getTodoStatus(todo.status).label}`"
-                      ></i>
+                      ><TriangleAlertIcon v-if="indicatorMode === 'shapes' && todo.status === 'blocked'" aria-hidden="true" /><template v-else>{{ indicatorMode !== 'lights' ? todoStatusSymbol(todo.status) : '' }}</template></i>
                     </span>
                   </span>
                   <span class="gantt-bar-route">
@@ -1001,7 +1089,7 @@ onBeforeUnmount(() => {
       <div class="calendar-grid">
         <article v-for="day in days" :key="day.key" class="calendar-day">
           <header><strong>{{ day.label }}</strong><span>{{ day.weekday }}</span></header>
-          <button v-for="flight in flightsForDay(day.key)" :key="flight.id" class="calendar-flight" :style="getAircraftStyle(flight.aircraft)" @click="openFlight(flight)">
+          <button v-for="flight in flightsForDay(day.key)" :key="flight.id" class="calendar-flight" :style="getAircraftStyle(flight.aircraft)" @click="openFlight(flight)" @mouseenter="showFlightPopover(flight, $event)" @mouseleave="hideFlightPopover" @focus="showFlightPopover(flight, $event)" @blur="hideFlightPopover">
             <span class="aircraft-color-label">{{ flight.aircraft }}</span>
             <span>{{ flight.from }} → {{ flight.to }}</span>
           </button>
@@ -1011,14 +1099,23 @@ onBeforeUnmount(() => {
 
     <section v-else class="alternative-panel list-panel">
       <ElTable :data="visibleMonthFlights" stripe>
-        <ElTableColumn prop="date" label="日期" width="120" />
+        <ElTableColumn label="日期" width="120"><template #default="{ row }">{{ getFlightDisplayDate(row) }}</template></ElTableColumn>
         <ElTableColumn label="注册号" width="110"><template #default="{ row }"><span class="aircraft-color-label" :style="getAircraftStyle(row.aircraft)">{{ row.aircraft }}</span></template></ElTableColumn>
         <ElTableColumn label="类型" width="100"><template #default="{ row }"><span class="flight-type-tag"><component :is="flightTypeIcons[row.type as FlightType]" aria-hidden="true" />{{ row.type }}</span></template></ElTableColumn>
-        <ElTableColumn label="航段"><template #default="{ row }">{{ row.from }} {{ row.std }}Z - {{ row.sta }}Z {{ row.to }}</template></ElTableColumn>
+        <ElTableColumn label="航段"><template #default="{ row }">{{ row.from }} {{ formatFlightTime(row.std) }} - {{ formatFlightTime(row.sta) }} {{ row.to }}</template></ElTableColumn>
         <ElTableColumn label="待办事项"><template #default="{ row }">{{ todosForFlight(row).map((todo) => todo.content).join(' / ') }}</template></ElTableColumn>
         <ElTableColumn label="操作" width="90"><template #default="{ row }"><ElButton link type="primary" @click="openFlight(row)">查看</ElButton></template></ElTableColumn>
       </ElTable>
     </section>
+
+    <Teleport to="body">
+      <aside v-if="hoveredFlight" class="flight-hover-popover sj-mission-control" :style="flightPopoverPosition" aria-live="polite">
+        <header><span>{{ hoveredFlight.type }}</span><strong>{{ hoveredFlight.flightNo }}</strong><b>{{ hoveredFlight.aircraft }}</b></header>
+        <div class="hover-route"><strong>{{ hoveredFlight.from }}</strong><i>→</i><strong>{{ hoveredFlight.to }}</strong></div>
+        <p>{{ getFlightDisplayDate(hoveredFlight) }} · {{ formatFlightTime(hoveredFlight.std) }}–{{ formatFlightTime(hoveredFlight.sta) }} · {{ flightDuration(hoveredFlight) }}</p>
+        <ul><li v-for="todo in todosForFlight(hoveredFlight).slice(0, 3)" :key="todo.id"><b :class="`status-${getTodoStatus(todo.status).color}`">{{ todoStatusSymbol(todo.status) }}</b><span>{{ cleanTodoContent(todo.content) }}</span></li></ul>
+      </aside>
+    </Teleport>
 
     <ElDrawer
       v-model="inspectorVisible"
@@ -1256,6 +1353,21 @@ onBeforeUnmount(() => {
 .flight-route .airport-code { font-size: 14px; line-height: 1; }
 .flight-route time { color: var(--sj-text-2); font-size: 11px; font-weight: 650; white-space: nowrap; }
 .todo-status-light { display: inline-block; width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: currentColor; }
+.todo-status-light.with-symbol { display: inline-grid; width: 15px; height: 15px; flex-basis: 15px; place-items: center; border: 1px solid currentColor; background: color-mix(in srgb, currentColor 18%, var(--sj-surface)); font-size: 10px; font-style: normal; line-height: 1; }
+.todo-status-light.color-vision.status-lime { border-radius: 50%; }
+.todo-status-light.color-vision.status-amber { border-radius: 2px; }
+.todo-status-light.color-vision.status-red {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0;
+}
+.todo-status-light.color-vision.status-red svg {
+  width: 15px;
+  height: 15px;
+  color: currentColor;
+  stroke-width: 2;
+}
 .status-lime { color: var(--sj-lime); }
 .status-blue { color: var(--sj-blue); }
 .status-amber { color: var(--sj-amber); }
@@ -1371,12 +1483,12 @@ onBeforeUnmount(() => {
 .dialog-full-width { width: 100%; }
 .dialog-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
 .edit-flight-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
-.edit-flight-form :deep(.el-form-item__label) { color: #cfd5df; font-weight: 600; }
+.edit-flight-form :deep(.el-form-item__label) { color: var(--sj-text-2); font-weight: 600; }
 @media (max-width: 1180px) { .toolbar-spacer { display: none; } .timezone-field { margin-left: 0; } }
 @media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .gantt-layout { grid-template-columns: 128px minmax(0, 1fr); } .gantt-aircraft-column > div, .gantt-row { height: 86px; } .gantt-flight-bar { min-width: 104px; } }
 
 /* Mission Control Dark: opt-in operational workspace skin. */
-.flight-plan-page.sj-mission-control {
+.flight-plan-page.sj-mission-control.is-dark {
   --mc-canvas: #07090e;
   --mc-surface: #0b0e15;
   --mc-raised: #111722;
@@ -1395,91 +1507,97 @@ onBeforeUnmount(() => {
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
 }
 
-.sj-mission-control .plan-toolbar,
-.sj-mission-control .timeline-panel,
-.sj-mission-control .alternative-panel {
+.sj-mission-control.is-dark .plan-toolbar,
+.sj-mission-control.is-dark .timeline-panel,
+.sj-mission-control.is-dark .alternative-panel {
   border: 0;
   border-radius: 0;
   background: var(--mc-canvas);
   box-shadow: none;
 }
 
-.sj-mission-control .plan-toolbar { gap: 0; padding: 0; border-bottom: 1px solid var(--mc-line); }
-.sj-mission-control .toolbar-main { min-height: 58px; padding: 10px 20px; align-items: flex-end; border-bottom: 1px solid var(--mc-line); background: var(--mc-surface); }
-.sj-mission-control .toolbar-filters { min-height: 56px; padding: 9px 20px; align-items: flex-end; border-bottom: 1px solid var(--mc-line); background: #090c12; }
-.sj-mission-control .view-switch { height: 36px; border-color: #283247; border-radius: 7px; background: #111722; }
-.sj-mission-control .view-switch :deep(.el-button) { min-height: 30px; color: #7d899d; font-size: 12px; }
-.sj-mission-control .view-switch :deep(.el-button.active) { color: #fff; background: #26344a; box-shadow: inset 0 0 0 1px rgba(85,168,255,.38), 0 0 16px rgba(85,168,255,.08); }
-.sj-mission-control .year-select { width: 108px; }
-.sj-mission-control .month-select,
-.sj-mission-control .day-select { width: 84px; }
-.sj-mission-control .date-selectors :deep(.el-select__wrapper),
-.sj-mission-control .timezone-field :deep(.el-select__wrapper),
-.sj-mission-control .toolbar-filters :deep(.el-select__wrapper) {
+.sj-mission-control.is-dark .plan-toolbar { gap: 0; padding: 0; border-bottom: 1px solid var(--mc-line); }
+.sj-mission-control.is-dark .toolbar-main { min-height: 58px; padding: 10px 20px; align-items: flex-end; border-bottom: 1px solid var(--mc-line); background: var(--mc-surface); }
+.sj-mission-control.is-dark .toolbar-filters { min-height: 56px; padding: 9px 20px; align-items: flex-end; border-bottom: 1px solid var(--mc-line); background: #090c12; }
+.sj-mission-control.is-dark .view-switch { height: 36px; border-color: #283247; border-radius: 7px; background: #111722; }
+.sj-mission-control.is-dark .view-switch :deep(.el-button) { min-height: 30px; color: #7d899d; font-size: 12px; }
+.sj-mission-control.is-dark .view-switch :deep(.el-button.active) { color: #fff; background: #26344a; box-shadow: inset 0 0 0 1px rgba(85,168,255,.38), 0 0 16px rgba(85,168,255,.08); }
+.sj-mission-control.is-dark .year-select { width: 108px; }
+.sj-mission-control.is-dark .month-select,
+.sj-mission-control.is-dark .day-select { width: 84px; }
+.sj-mission-control.is-dark .date-selectors :deep(.el-select__wrapper),
+.sj-mission-control.is-dark .timezone-field :deep(.el-select__wrapper),
+.sj-mission-control.is-dark .toolbar-filters :deep(.el-select__wrapper) {
   min-height: 36px;
   border-radius: 6px;
   background: #111722;
   box-shadow: 0 0 0 1px #2a3345 inset;
 }
-.sj-mission-control .date-selectors :deep(.el-select__selected-item),
-.sj-mission-control .timezone-field :deep(.el-select__selected-item),
-.sj-mission-control .toolbar-filters :deep(.el-select__selected-item) { color: #e7edf7; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
-.sj-mission-control .date-selectors :deep(.el-select__caret),
-.sj-mission-control .timezone-field :deep(.el-select__caret),
-.sj-mission-control .toolbar-filters :deep(.el-select__caret) { color: #778398; }
-.sj-mission-control .today-button { min-height: 36px; border-color: color-mix(in srgb, var(--sj-lime) 42%, transparent); color: var(--sj-lime); background: var(--sj-lime-soft); }
-.sj-mission-control .today-button:hover,
-.sj-mission-control .today-button:focus-visible { border-color: var(--sj-lime); color: var(--sj-canvas); background: var(--sj-lime); }
-.sj-mission-control .timezone-field > span,
-.sj-mission-control .toolbar-filters label > span { padding-left: 1px; color: #657086; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
-.sj-mission-control .timezone-field { width: 240px; }
-.sj-mission-control .toolbar-filters label { width: 165px; }
-.sj-mission-control .toolbar-filters .timezone-field { width: 240px; }
-.sj-mission-control .add-button { min-height: 36px; border-color: var(--mc-lime); color: #101607; background: var(--mc-lime); box-shadow: 0 0 20px rgba(163,230,53,.12); font-weight: 750; }
-.sj-mission-control .add-button:hover,
-.sj-mission-control .add-button:focus-visible { border-color: #b8f35c; color: #071006; background: #b8f35c; }
-.sj-mission-control .timeline-panel,
-.sj-mission-control .alternative-panel,
-.sj-mission-control .gantt-panel { margin-top: 0; padding: 0; border: 0; border-radius: 0; background: var(--sj-canvas); box-shadow: none; }
-.sj-mission-control .timeline-sticky-header { padding: 0; background: #0a0d14; }
-.sj-mission-control .timeline-header-viewport { border: 0; border-radius: 0; background: #0a0d14; }
-.sj-mission-control .timeline-header { height: 64px; border-bottom-color: var(--mc-line); background: #0a0d14; }
-.sj-mission-control .day-head { border-right: 1px solid var(--mc-line); color: #edf2f8; }
-.sj-mission-control .day-head span { color: #8090a6; font-size: 9px; }
-.sj-mission-control .day-head strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; letter-spacing: -.02em; }
-.sj-mission-control .day-head small { color: #647087; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .08em; }
-.sj-mission-control .day-head.today { border: 0; border-right: 1px solid #2b4630; border-radius: 0; background: #152118; box-shadow: inset 0 -2px var(--mc-lime); }
-.sj-mission-control .day-head.today span { color: var(--mc-lime); }
-.sj-mission-control .timeline-scroll { border: 0; border-radius: 0; background: var(--mc-canvas); scrollbar-color: #38445b #0a0d14; }
-.sj-mission-control .timeline-body { height: clamp(500px, calc(100dvh - 243px), 742px); }
-.sj-mission-control .day-column,
-.sj-mission-control .day-column:nth-child(even) { border-right-color: var(--mc-line); background-color: var(--mc-canvas); background-image: linear-gradient(90deg, rgba(31,39,53,.2) 1px, transparent 1px); background-size: 25% 100%; }
-.sj-mission-control .day-column:nth-child(even) { background-color: #090b11; }
-.sj-mission-control .day-column.today { border-inline: 1px solid rgba(163,230,53,.42); background-color: #0a0e0b; box-shadow: inset 0 0 35px rgba(163,230,53,.025); }
-.sj-mission-control .hour-line { border-top-color: #1b2230; color: #4f5c72; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
-.sj-mission-control .current-time-line { border-top: 1px solid var(--mc-red); box-shadow: 0 0 8px rgba(255,102,92,.25); }
-.sj-mission-control .current-time-line i { color: #140807; background: var(--mc-red); border-radius: 3px; padding: 2px 5px; font-family: "SFMono-Regular", Consolas, monospace; }
-.sj-mission-control .flight-card { min-height: 72px; border-color: color-mix(in srgb, var(--aircraft-color) 58%, var(--sj-border)); border-left-width: 3px; border-radius: 7px; color: var(--sj-text-1); background: color-mix(in srgb, var(--aircraft-color) 22%, var(--sj-surface-2)); box-shadow: 0 0 0 1px var(--aircraft-soft) inset, 0 0 16px var(--aircraft-soft); }
-.sj-mission-control .flight-card:hover,
-.sj-mission-control .flight-card:focus-visible { outline-color: rgba(85,168,255,.35); box-shadow: 0 0 0 1px rgba(85,168,255,.35) inset, 0 0 24px rgba(58,135,217,.28); }
-.sj-mission-control .phase-arrived,
-.sj-mission-control .phase-confirmed,
-.sj-mission-control .phase-preparing,
-.sj-mission-control .phase-maintenance,
-.sj-mission-control .phase-aog { border-color: color-mix(in srgb, var(--aircraft-color) 58%, var(--sj-border)); background: color-mix(in srgb, var(--aircraft-color) 22%, var(--sj-surface-2)); box-shadow: 0 0 16px var(--aircraft-soft); }
-.sj-mission-control .flight-main .aircraft-color-label { color: var(--aircraft-color); font-family: var(--sj-font-data); font-size: 12px; letter-spacing: .04em; }
-.sj-mission-control .flight-route { color: var(--sj-text-1); font-family: var(--sj-font-data); }
-.sj-mission-control .flight-route .airport-code { color: var(--sj-text-1); font-size: 15px; letter-spacing: .03em; }
-.sj-mission-control .flight-route time { color: var(--sj-text-2); font-size: 11px; }
-.sj-mission-control .flight-card-todos i { color: var(--sj-text-2); font-family: var(--sj-font-ui); font-size: 9px; line-height: 1.45; }
+.sj-mission-control.is-dark .date-selectors :deep(.el-select__selected-item),
+.sj-mission-control.is-dark .timezone-field :deep(.el-select__selected-item),
+.sj-mission-control.is-dark .toolbar-filters :deep(.el-select__selected-item) { color: #e7edf7; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+.sj-mission-control.is-dark .date-selectors :deep(.el-select__caret),
+.sj-mission-control.is-dark .timezone-field :deep(.el-select__caret),
+.sj-mission-control.is-dark .toolbar-filters :deep(.el-select__caret) { color: #778398; }
+.sj-mission-control.is-dark .today-button { min-height: 36px; border-color: color-mix(in srgb, var(--sj-lime) 42%, transparent); color: var(--sj-lime); background: var(--sj-lime-soft); }
+.sj-mission-control.is-dark .today-button:hover,
+.sj-mission-control.is-dark .today-button:focus-visible { border-color: var(--sj-lime); color: var(--sj-canvas); background: var(--sj-lime); }
+.sj-mission-control.is-dark .timezone-field > span,
+.sj-mission-control.is-dark .toolbar-filters label > span { padding-left: 1px; color: #657086; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.sj-mission-control.is-dark .timezone-field { width: 240px; }
+.sj-mission-control.is-dark .toolbar-filters label { width: 165px; }
+.sj-mission-control.is-dark .toolbar-filters .timezone-field { width: 240px; }
+.sj-mission-control.is-dark .time-base-field { display: grid; gap: 2px; width: 210px; }
+.sj-mission-control.is-dark .time-base-field > span:first-child { color: #657086; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.time-base-switch, .indicator-controls { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--sj-border); border-radius: var(--sj-radius-sm); background: var(--sj-surface-raised); }
+.time-base-switch button, .indicator-controls button { min-width: 52px; height: 30px; border: 0; border-radius: 4px; color: var(--sj-text-muted); background: transparent; font: 700 11px "SFMono-Regular", Consolas, monospace; cursor: pointer; }
+.time-base-switch button.active, .indicator-controls button.active { color: var(--sj-text); background: var(--sj-blue-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sj-blue) 45%, transparent); }
+.indicator-controls { margin-left: auto; }
+.sj-mission-control.is-dark .add-button { min-height: 36px; border-color: var(--mc-lime); color: #101607; background: var(--mc-lime); box-shadow: 0 0 20px rgba(163,230,53,.12); font-weight: 750; }
+.sj-mission-control.is-dark .add-button:hover,
+.sj-mission-control.is-dark .add-button:focus-visible { border-color: #b8f35c; color: #071006; background: #b8f35c; }
+.sj-mission-control.is-dark .timeline-panel,
+.sj-mission-control.is-dark .alternative-panel,
+.sj-mission-control.is-dark .gantt-panel { margin-top: 0; padding: 0; border: 0; border-radius: 0; background: var(--sj-canvas); box-shadow: none; }
+.sj-mission-control.is-dark .timeline-sticky-header { padding: 0; background: #0a0d14; }
+.sj-mission-control.is-dark .timeline-header-viewport { border: 0; border-radius: 0; background: #0a0d14; }
+.sj-mission-control.is-dark .timeline-header { height: 64px; border-bottom-color: var(--mc-line); background: #0a0d14; }
+.sj-mission-control.is-dark .day-head { border-right: 1px solid var(--mc-line); color: #edf2f8; }
+.sj-mission-control.is-dark .day-head span { color: #8090a6; font-size: 9px; }
+.sj-mission-control.is-dark .day-head strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; letter-spacing: -.02em; }
+.sj-mission-control.is-dark .day-head small { color: #647087; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; letter-spacing: .08em; }
+.sj-mission-control.is-dark .day-head.today { border: 0; border-right: 1px solid #2b4630; border-radius: 0; background: #152118; box-shadow: inset 0 -2px var(--mc-lime); }
+.sj-mission-control.is-dark .day-head.today span { color: var(--mc-lime); }
+.sj-mission-control.is-dark .timeline-scroll { border: 0; border-radius: 0; background: var(--mc-canvas); scrollbar-color: #38445b #0a0d14; }
+.sj-mission-control.is-dark .timeline-body { height: clamp(500px, calc(100dvh - 243px), 742px); }
+.sj-mission-control.is-dark .day-column,
+.sj-mission-control.is-dark .day-column:nth-child(even) { border-right-color: var(--mc-line); background-color: var(--mc-canvas); background-image: linear-gradient(90deg, rgba(31,39,53,.2) 1px, transparent 1px); background-size: 25% 100%; }
+.sj-mission-control.is-dark .day-column:nth-child(even) { background-color: #090b11; }
+.sj-mission-control.is-dark .day-column.today { border-inline: 1px solid rgba(163,230,53,.42); background-color: #0a0e0b; box-shadow: inset 0 0 35px rgba(163,230,53,.025); }
+.sj-mission-control.is-dark .hour-line { border-top-color: #1b2230; color: #4f5c72; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.sj-mission-control.is-dark .current-time-line { border-top: 1px solid var(--mc-red); box-shadow: 0 0 8px rgba(255,102,92,.25); }
+.sj-mission-control.is-dark .current-time-line i { color: #140807; background: var(--mc-red); border-radius: 3px; padding: 2px 5px; font-family: "SFMono-Regular", Consolas, monospace; }
+.sj-mission-control.is-dark .flight-card { min-height: 72px; border-color: color-mix(in srgb, var(--aircraft-color) 58%, var(--sj-border)); border-left-width: 3px; border-radius: 7px; color: var(--sj-text-1); background: color-mix(in srgb, var(--aircraft-color) 22%, var(--sj-surface-2)); box-shadow: 0 0 0 1px var(--aircraft-soft) inset, 0 0 16px var(--aircraft-soft); }
+.sj-mission-control.is-dark .flight-card:hover,
+.sj-mission-control.is-dark .flight-card:focus-visible { outline-color: rgba(85,168,255,.35); box-shadow: 0 0 0 1px rgba(85,168,255,.35) inset, 0 0 24px rgba(58,135,217,.28); }
+.sj-mission-control.is-dark .phase-arrived,
+.sj-mission-control.is-dark .phase-confirmed,
+.sj-mission-control.is-dark .phase-preparing,
+.sj-mission-control.is-dark .phase-maintenance,
+.sj-mission-control.is-dark .phase-aog { border-color: color-mix(in srgb, var(--aircraft-color) 58%, var(--sj-border)); background: color-mix(in srgb, var(--aircraft-color) 22%, var(--sj-surface-2)); box-shadow: 0 0 16px var(--aircraft-soft); }
+.sj-mission-control.is-dark .flight-main .aircraft-color-label { color: var(--aircraft-color); font-family: var(--sj-font-data); font-size: 12px; letter-spacing: .04em; }
+.sj-mission-control.is-dark .flight-route { color: var(--sj-text-1); font-family: var(--sj-font-data); }
+.sj-mission-control.is-dark .flight-route .airport-code { color: var(--sj-text-1); font-size: 15px; letter-spacing: .03em; }
+.sj-mission-control.is-dark .flight-route time { color: var(--sj-text-2); font-size: 11px; }
+.sj-mission-control.is-dark .flight-card-todos i { color: var(--sj-text-2); font-family: var(--sj-font-ui); font-size: 9px; line-height: 1.45; }
 
-.sj-mission-control .calendar-grid { gap: 1px; border-color: var(--mc-line); border-radius: 0; background: var(--mc-line); }
-.sj-mission-control .calendar-day { background: #090c12; }
-.sj-mission-control .calendar-day:nth-child(even) { background: #0b0f16; }
-.sj-mission-control .calendar-day header { color: #8b98ab; }
-.sj-mission-control .calendar-flight { border: 1px solid color-mix(in srgb, var(--aircraft-color) 48%, var(--sj-border)); color: var(--sj-text-1); background: color-mix(in srgb, var(--aircraft-color) 18%, var(--sj-surface-2)); }
-.sj-mission-control .list-panel { background: var(--mc-canvas); }
-.sj-mission-control .list-panel :deep(.el-table) {
+.sj-mission-control.is-dark .calendar-grid { gap: 1px; border-color: var(--mc-line); border-radius: 0; background: var(--mc-line); }
+.sj-mission-control.is-dark .calendar-day { background: #090c12; }
+.sj-mission-control.is-dark .calendar-day:nth-child(even) { background: #0b0f16; }
+.sj-mission-control.is-dark .calendar-day header { color: #8b98ab; }
+.sj-mission-control.is-dark .calendar-flight { border: 1px solid color-mix(in srgb, var(--aircraft-color) 48%, var(--sj-border)); color: var(--sj-text-1); background: color-mix(in srgb, var(--aircraft-color) 18%, var(--sj-surface-2)); }
+.sj-mission-control.is-dark .list-panel { background: var(--mc-canvas); }
+.sj-mission-control.is-dark .list-panel :deep(.el-table) {
   --el-table-bg-color: #080b11;
   --el-table-tr-bg-color: #080b11;
   --el-table-header-bg-color: #0e131d;
@@ -1492,24 +1610,37 @@ onBeforeUnmount(() => {
   color: #c6cfdd;
   background: #080b11;
 }
-.sj-mission-control .list-panel :deep(.el-table th.el-table__cell) { height: 42px; color: #7c889b; background: #0e131d; font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; letter-spacing: .08em; }
-.sj-mission-control .list-panel :deep(.el-table td.el-table__cell) { height: 48px; color: #c8d2e0; border-bottom-color: #1c2330; background: #080b11; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
-.sj-mission-control .list-panel :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) { background: #0a0e15; }
-.sj-mission-control .list-panel :deep(.el-table__body tr:hover > td.el-table__cell) { background: #111b2a; }
-.sj-mission-control .list-panel :deep(.el-table__inner-wrapper::before) { background: #1f2633; }
-.sj-mission-control .list-panel :deep(.el-button.is-link) { color: var(--mc-blue); }
+.sj-mission-control.is-dark .list-panel :deep(.el-table th.el-table__cell) { height: 42px; color: #7c889b; background: #0e131d; font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; letter-spacing: .08em; }
+.sj-mission-control.is-dark .list-panel :deep(.el-table td.el-table__cell) { height: 48px; color: #c8d2e0; border-bottom-color: #1c2330; background: #080b11; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
+.sj-mission-control.is-dark .list-panel :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) { background: #0a0e15; }
+.sj-mission-control.is-dark .list-panel :deep(.el-table__body tr:hover > td.el-table__cell) { background: #111b2a; }
+.sj-mission-control.is-dark .list-panel :deep(.el-table__inner-wrapper::before) { background: #1f2633; }
+.sj-mission-control.is-dark .list-panel :deep(.el-button.is-link) { color: var(--mc-blue); }
 
 @media (max-width: 760px) {
-  .flight-plan-page.sj-mission-control { padding: 0; }
-  .sj-mission-control .toolbar-main,
-  .sj-mission-control .toolbar-filters { padding: 10px 12px; }
-  .sj-mission-control .toolbar-filters .timezone-field { width: 100%; }
-  .sj-mission-control .plan-toolbar,
-  .sj-mission-control .timeline-panel,
-  .sj-mission-control .alternative-panel { padding: 0; border-radius: 0; }
-  .sj-mission-control .flight-card-todos { display: grid; }
-  .sj-mission-control .timeline-body { height: 610px; }
+  .flight-plan-page.sj-mission-control.is-dark { padding: 0; }
+  .sj-mission-control.is-dark .toolbar-main,
+  .sj-mission-control.is-dark .toolbar-filters { padding: 10px 12px; }
+  .sj-mission-control.is-dark .toolbar-filters .timezone-field { width: 100%; }
+  .sj-mission-control.is-dark .plan-toolbar,
+  .sj-mission-control.is-dark .timeline-panel,
+  .sj-mission-control.is-dark .alternative-panel { padding: 0; border-radius: 0; }
+  .sj-mission-control.is-dark .flight-card-todos { display: grid; }
+  .sj-mission-control.is-dark .timeline-body { height: 610px; }
 }
+
+.flight-hover-popover { position: fixed; z-index: 5000; width: 320px; padding: var(--sj-space-4); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-overlay); color: var(--sj-text-1); background: var(--sj-surface-4); box-shadow: var(--sj-shadow-panel); pointer-events: none; }
+.flight-hover-popover header { display: flex; align-items: center; gap: 8px; }
+.flight-hover-popover header span { padding: 3px 6px; border: 1px solid var(--sj-border); border-radius: var(--sj-radius-tag); color: var(--sj-blue); font: 700 10px var(--sj-font-data); }
+.flight-hover-popover header strong { font-size: 15px; }
+.flight-hover-popover header b { margin-left: auto; color: var(--sj-teal); font: 700 13px var(--sj-font-data); }
+.hover-route { display: flex; align-items: center; justify-content: space-between; margin: var(--sj-space-4) 0 6px; font: 800 25px var(--sj-font-data); }
+.hover-route i { color: var(--sj-text-3); font-style: normal; }
+.flight-hover-popover p { color: var(--sj-text-2); font: 11px var(--sj-font-data); }
+.flight-hover-popover ul { display: grid; gap: 7px; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--sj-border); list-style: none; }
+.flight-hover-popover li { display: flex; align-items: center; gap: var(--sj-space-2); color: var(--sj-text-2); font-size: 12px; }
+.flight-hover-popover li b { display: grid; width: 15px; height: 15px; place-items: center; border-radius: 50%; color: var(--sj-canvas); font-size: 10px; }
+.flight-hover-popover li b.status-lime { background: var(--sj-lime); }.flight-hover-popover li b.status-amber { background: var(--sj-amber); }.flight-hover-popover li b.status-red { background: var(--sj-red); }
 </style>
 
 <style>

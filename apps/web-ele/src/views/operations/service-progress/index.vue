@@ -55,7 +55,7 @@ const defaultNodes: ServiceNode[] = [
 const serviceNodes = ref<ServiceNode[]>(defaultNodes.map((node) => ({ ...node })));
 const nodeDrafts = ref<ServiceNode[]>([]);
 const configOpen = ref(false);
-const timeBase = ref<'BJ' | 'UTC'>('UTC');
+const timeBase = ref<'LT' | 'UTC' | 'BJ'>('UTC');
 const startDate = ref('2026-08-22');
 const endDate = ref('2026-08-24');
 const registrationFilter = ref('全部注册号');
@@ -166,8 +166,9 @@ function statusLabel(status: NodeStatus) {
         <label class="field compact-field">
           <span>时间基准</span>
           <span class="segmented" role="group" aria-label="时间基准">
+            <button :class="{ active: timeBase === 'LT' }" type="button" @click="timeBase = 'LT'">LT</button>
             <button :class="{ active: timeBase === 'UTC' }" type="button" @click="timeBase = 'UTC'">UTC</button>
-            <button :class="{ active: timeBase === 'BJ' }" type="button" @click="timeBase = 'BJ'">北京时间</button>
+            <button :class="{ active: timeBase === 'BJ' }" type="button" @click="timeBase = 'BJ'">BJ</button>
           </span>
         </label>
         <label class="field date-field"><span>开始日期</span><input v-model="startDate" type="date" /></label>

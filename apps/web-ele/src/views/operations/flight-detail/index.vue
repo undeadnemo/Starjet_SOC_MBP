@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { usePreferences } from '@vben/preferences';
+
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -6,6 +8,7 @@ defineOptions({ name: 'FlightDetail' });
 
 const route = useRoute();
 const router = useRouter();
+const { isDark } = usePreferences();
 
 const detailUrl = computed(() => {
   const search = new URLSearchParams();
@@ -14,6 +17,7 @@ const detailUrl = computed(() => {
     if (Array.isArray(value)) value.forEach((item) => item && search.append(key, item));
     else if (value !== null && value !== undefined) search.set(key, String(value));
   });
+  search.set('theme', isDark.value ? 'dark' : 'light');
   const baseUrl = import.meta.env.BASE_URL.endsWith('/')
     ? import.meta.env.BASE_URL
     : `${import.meta.env.BASE_URL}/`;
@@ -39,7 +43,7 @@ onBeforeUnmount(() => window.removeEventListener('message', handleDetailMessage)
 </script>
 
 <template>
-  <div class="flight-detail-host">
+  <div class="flight-detail-host sj-mission-control">
     <iframe
       :src="detailUrl"
       class="flight-detail-frame"
@@ -55,7 +59,7 @@ onBeforeUnmount(() => window.removeEventListener('message', handleDetailMessage)
   height: var(--vben-content-height, 100dvh);
   min-height: 0;
   overflow: hidden;
-  background: #07090e;
+  background: var(--sj-canvas);
 }
 
 .flight-detail-frame {
@@ -63,6 +67,6 @@ onBeforeUnmount(() => window.removeEventListener('message', handleDetailMessage)
   width: 100%;
   height: 100%;
   border: 0;
-  background: #07090e;
+  background: var(--sj-canvas);
 }
 </style>
