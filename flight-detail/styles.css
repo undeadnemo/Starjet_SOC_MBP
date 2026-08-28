@@ -631,6 +631,33 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
   color: var(--sj-text-3);
 }
 
+.fuel-unit-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sj-space-2);
+  color: var(--sj-text-3);
+  font-size: 11px;
+}
+
+.fuel-unit-control select {
+  height: 28px;
+  min-width: 64px;
+  padding: 0 var(--sj-space-2);
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-text-1);
+  background: var(--sj-surface-2);
+  font-family: var(--sj-font-data);
+  text-transform: uppercase;
+}
+
+.fuel-unit-label {
+  color: inherit;
+  font-family: var(--sj-font-data);
+  font-style: normal;
+  text-transform: uppercase;
+}
+
 .fuel-record-grid input,
 .permit-row [contenteditable="true"],
 .permit-type,
@@ -666,11 +693,13 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
   color: var(--sj-text-3);
 }
 
-.fuel-total strong {
+.fuel-total b {
   color: var(--sj-lime);
   font-family: var(--sj-font-data);
   font-size: 20px;
 }
+
+.fuel-total b .fuel-unit-label { color: var(--sj-lime); }
 
 .fuel-actions {
   display: flex;
@@ -714,12 +743,30 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
 
 .permit-row {
   display: grid;
-  grid-template-columns: 110px minmax(180px, 1fr) 150px 150px 120px;
+  grid-template-columns: 110px minmax(180px, 1fr) 150px 150px 120px 56px;
   gap: var(--sj-space-3);
   align-items: center;
   min-height: 60px;
   padding: var(--sj-space-3) var(--sj-space-4);
   border-bottom: 1px solid var(--sj-border);
+}
+
+.permit-table { min-width: 850px; }
+
+.permit-delete {
+  min-height: 28px;
+  padding: 0 var(--sj-space-2);
+  border: 1px solid var(--sj-red);
+  border-radius: var(--sj-radius-control);
+  color: var(--sj-red);
+  background: var(--sj-red-soft);
+  cursor: pointer;
+}
+
+.permit-delete:hover,
+.permit-delete:focus-visible {
+  color: var(--sj-text-1);
+  background: var(--sj-red);
 }
 
 .permit-row.permit-head {
@@ -1762,3 +1809,197 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
     padding: var(--sj-space-3) var(--sj-space-4);
   }
 }
+
+/* Flight billing: configuration comes from bill pre-management; state is flight-specific. */
+.billing-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: var(--sj-space-4);
+  border: 1px solid var(--sj-border);
+  background: var(--sj-surface-1);
+}
+.billing-summary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 62px;
+  padding: 0 var(--sj-space-4);
+  border-right: 1px solid var(--sj-border);
+}
+.billing-summary > div:last-child { border-right: 0; }
+.billing-summary span { color: var(--sj-text-3); font-size: 10px; }
+.billing-summary strong { color: var(--sj-text-1); font: 800 20px var(--sj-font-data); }
+.billing-summary strong.is-warning { color: var(--sj-amber); }
+.billing-summary strong.is-info { color: var(--sj-blue); }
+.billing-summary strong.is-ready { color: var(--sj-lime); }
+.billing-card { overflow-x: auto; }
+.billing-table { min-width: 760px; }
+.billing-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) 90px 110px minmax(210px, 1.5fr) 150px;
+  align-items: center;
+  min-height: 62px;
+  padding: var(--sj-space-2) var(--sj-space-4);
+  border-bottom: 1px solid var(--sj-border);
+  color: var(--sj-text-2);
+  font-size: 10px;
+}
+.billing-row:last-child { border-bottom: 0; }
+.billing-row.billing-head {
+  min-height: 38px;
+  color: var(--sj-text-3);
+  background: var(--sj-surface-2);
+  font-size: 9px;
+}
+.billing-row > span > b,
+.billing-row > span > small,
+.billing-row a > b,
+.billing-row a > small { display: block; }
+.billing-row > span > b { color: var(--sj-text-1); font-size: 11px; }
+.billing-row > span > small,
+.billing-row a > small { margin-top: 4px; color: var(--sj-text-3); font-size: 8px; }
+.billing-row time { color: var(--sj-text-3); font-family: var(--sj-font-data); }
+.billing-row a { color: var(--sj-blue); text-decoration: none; }
+.billing-row a:hover b,
+.billing-row a:focus-visible b { text-decoration: underline; }
+.billing-no-link { color: var(--sj-text-3); }
+.billing-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  padding: 5px 7px;
+  border-radius: var(--sj-radius-control);
+  font-style: normal;
+  font-weight: 800;
+}
+.billing-state i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.billing-state.is-missing { color: var(--sj-amber); background: var(--sj-amber-soft); }
+.billing-state.is-received { color: var(--sj-blue); background: var(--sj-blue-soft); }
+.billing-state.is-paid { color: var(--sj-lime); background: var(--sj-lime-soft); }
+
+@media (max-width: 760px) {
+  .billing-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .billing-summary > div:nth-child(2) { border-right: 0; }
+  .billing-summary > div:nth-child(-n + 2) { border-bottom: 1px solid var(--sj-border); }
+}
+
+/* The host app passes its active theme to this standalone iframe. */
+html.light {
+  --ink: #172033;
+  --muted: #748196;
+  --line: #d9e1ea;
+  --soft: #f8fafc;
+  --navy: #f3f6f9;
+  --blue: #1677d2;
+  --teal: #087e72;
+  --green: #5f9415;
+  --orange: #a86500;
+  --red: #cf3d38;
+  --white: #ffffff;
+  --shadow: 0 10px 28px rgb(23 32 51 / 10%);
+  --sj-canvas: #f3f6f9;
+  --sj-surface-1: #ffffff;
+  --sj-surface-2: #f8fafc;
+  --sj-surface-3: #eef2f6;
+  --sj-surface-4: #e5ebf2;
+  --sj-grid: #e3e9f0;
+  --sj-border: #d9e1ea;
+  --sj-border-strong: #b8c4d2;
+  --sj-text-1: #172033;
+  --sj-text-2: #465469;
+  --sj-text-3: #748196;
+  --sj-text-disabled: #a1aab7;
+  --sj-blue: #1677d2;
+  --sj-blue-soft: rgb(22 119 210 / 10%);
+  --sj-lime: #5f9415;
+  --sj-lime-soft: rgb(95 148 21 / 11%);
+  --sj-amber: #a86500;
+  --sj-amber-soft: rgb(168 101 0 / 11%);
+  --sj-red: #cf3d38;
+  --sj-red-soft: rgb(207 61 56 / 10%);
+  color-scheme: light;
+  background: var(--sj-canvas);
+}
+
+html.light body,
+html.light .app-shell,
+html.light main,
+html.light .workspace,
+html.light .content,
+html.light .detail-layout { color: var(--sj-text-1); background: var(--sj-canvas); }
+html.light .topbar,
+html.light .trip-strip,
+html.light .flight-head,
+html.light .tabs { color: var(--sj-text-1); background: var(--sj-surface-1); border-color: var(--sj-border); box-shadow: none; }
+html.light .rightbar { border-color: var(--sj-border); background: var(--sj-surface-2); }
+html.light .leg-card,
+html.light .card,
+html.light .mini-card,
+html.light .risk,
+html.light .release,
+html.light .activity-list article > div,
+html.light dialog { color: var(--sj-text-1); border-color: var(--sj-border); background: var(--sj-surface-1); box-shadow: var(--sj-shadow-panel); }
+html.light .leg-card:hover { border-color: var(--sj-border-strong); background: var(--sj-surface-2); }
+html.light .leg-card.active { border-color: var(--sj-blue); color: var(--sj-text-1); background: var(--sj-blue-soft); box-shadow: 0 0 0 1px rgb(22 119 210 / 20%); }
+html.light .leg-card.completed::before { color: #ffffff; background: var(--sj-lime); }
+html.light .text-icon,
+html.light .more-btn,
+html.light .leg-pager button,
+html.light .time-toggle,
+html.light .filters button,
+html.light .doc-categories button,
+html.light dialog input,
+html.light dialog select,
+html.light .dialog-actions button { color: var(--sj-text-2); border-color: var(--sj-border); background: var(--sj-surface-2); }
+html.light .flight-label,
+html.light .trip-summary small,
+html.light .airport p,
+html.light .route-line,
+html.light .head-meta div span,
+html.light .section-heading > span,
+html.light .section-intro,
+html.light .risk p,
+html.light .release-reason p,
+html.light .details-grid span,
+html.light .aircraft-data span { color: var(--sj-text-3); }
+html.light .trip-summary strong,
+html.light .airport h1,
+html.light .airport time,
+html.light .head-meta strong,
+html.light .section-heading h2,
+html.light .card-title h3,
+html.light .side-title h3,
+html.light .material-copy h3 { color: var(--sj-text-1); }
+html.light .trip-type,
+html.light .primary-btn,
+html.light .export-material > button { color: #ffffff; background: var(--sj-lime); }
+html.light .route-line i,
+html.light .track-base { background: var(--sj-border-strong); }
+html.light .track-base span { border-color: var(--sj-blue); background: var(--sj-surface-1); }
+html.light .ring { background: conic-gradient(var(--sj-lime) 0 82%, var(--sj-surface-4, #e5ebf2) 82%); box-shadow: none; }
+html.light .ring::before { background: var(--sj-surface-1); }
+html.light .tab:hover { color: var(--sj-text-1); background: var(--sj-surface-2); }
+html.light .tab b,
+html.light .status,
+html.light .side-title > span,
+html.light .progress { background: var(--sj-surface-3); }
+html.light .tr.th,
+html.light .task-row.header,
+html.light .slot-strip,
+html.light .fuel-order { color: var(--sj-text-3); background: var(--sj-surface-2); }
+html.light .readiness-row,
+html.light .action-item,
+html.light .mini-head,
+html.light .crew-line,
+html.light .service-row,
+html.light .tr,
+html.light .task-row,
+html.light .doc-row { border-bottom-color: var(--sj-border); }
+html.light .aircraft-hero { color: var(--sj-text-1); background: var(--sj-surface-3); }
+html.light .aircraft-hero p { color: var(--sj-text-2); }
+html.light .aircraft-data .issue,
+html.light .change-box { background: var(--sj-amber-soft); }
+html.light .material-mark,
+html.light .doc-icon { color: var(--sj-blue); background: var(--sj-blue-soft); }
+html.light .toast { color: #ffffff; background: var(--sj-lime); }
