@@ -1,1 +1,0 @@
-import{$n as e,On as t,ei as n}from"../jse/index-index-xtvt_pNh.js";import{t as r}from"./_plugin-vue_export-helper--Iaida6m.js";var i={};function a(n,r){return e(),t(`div`)}var o=r(i,[[`render`,a]]),s=n({IFrameView:()=>o});export{s as t};
