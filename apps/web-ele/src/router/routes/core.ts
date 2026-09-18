@@ -179,6 +179,19 @@ const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
           title: '航材管理 Demo',
         },
       },
+      {
+        name: 'MaterialCostManagementDemo',
+        path: '/demo/material-cost-management',
+        component: () =>
+          import('#/views/materials/cost-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航材成本管理 Demo',
+        },
+      },
     ]
   : [];
 
@@ -355,6 +368,19 @@ const developmentPreviewRoutes: RouteRecordRaw[] = isDevelopmentPreview
           hideInTab: true,
           ignoreAccess: true,
           title: '航材管理预览',
+        },
+      },
+      {
+        name: 'MaterialCostManagementPreview',
+        path: '/preview/material-cost-management',
+        component: () =>
+          import('#/views/materials/cost-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '航材成本管理预览',
         },
       },
     ]

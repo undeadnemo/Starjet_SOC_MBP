@@ -19,6 +19,15 @@ const routes: RouteRecordRaw[] = [
         name: 'AviationMaterials',
         path: '/materials/aviation-materials',
       },
+      {
+        component: () => import('#/views/materials/cost-management/index.vue'),
+        meta: {
+          icon: 'lucide:receipt-text',
+          title: '航材成本管理',
+        },
+        name: 'MaterialCostManagement',
+        path: '/materials/cost-management',
+      },
     ],
   },
 ];

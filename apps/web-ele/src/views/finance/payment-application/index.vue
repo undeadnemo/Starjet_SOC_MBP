@@ -4,6 +4,10 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { createIconifyIcon } from '@vben/icons';
 import { ElMessage } from 'element-plus';
 
+import AttributionGraphPicker, {
+  type AttributionSelection,
+} from './components/AttributionGraphPicker.vue';
+
 defineOptions({ name: 'PaymentApplication' });
 
 const ArrowLeftIcon = createIconifyIcon('lucide:arrow-left');
@@ -28,8 +32,7 @@ interface OcrItem extends ConfirmedField {
 interface PaymentDetail {
   amount: number;
   attachmentCount: number;
-  attributionId: string;
-  attributionType: AttributionType;
+  attribution: AttributionSelection;
   date: string;
   item: string;
   reason: string;
@@ -41,8 +44,6 @@ interface UploadedDocument {
   url: string;
 }
 
-type AttributionType = 'company' | 'customer' | 'flight' | 'journey' | 'station' | 'tail';
-
 const step = ref<1 | 2>(1);
 const fileInput = ref<HTMLInputElement>();
 const uploadedDocuments = ref<UploadedDocument[]>([]);
@@ -50,47 +51,6 @@ const activeDocumentId = ref('');
 const submitted = ref(false);
 
 const activeDocument = computed(() => uploadedDocuments.value.find((item) => item.id === activeDocumentId.value) || uploadedDocuments.value[0] || null);
-
-const attributionTypes: Array<{ label: string; value: AttributionType }> = [
-  { label: '客户', value: 'customer' },
-  { label: '公司', value: 'company' },
-  { label: '飞机', value: 'tail' },
-  { label: '行程', value: 'journey' },
-  { label: '航班', value: 'flight' },
-  { label: '航班站点', value: 'station' },
-];
-
-const attributionOptions: Record<AttributionType, Array<{ label: string; value: string }>> = {
-  customer: [
-    { label: '星海资本', value: 'customer-xh' },
-    { label: '远航科技', value: 'customer-yh' },
-    { label: '拓远实业', value: 'customer-ty' },
-  ],
-  company: [
-    { label: '吉星航空', value: 'company-starjet' },
-    { label: '星航公务机', value: 'company-xh' },
-  ],
-  tail: [
-    { label: 'B-602M · G650ER', value: 'tail-b602m' },
-    { label: 'B-9308 · G450', value: 'tail-b9308' },
-    { label: 'B-9811 · G650ER', value: 'tail-b9811' },
-  ],
-  journey: [
-    { label: 'SJ260820 · 北京—东京—新加坡', value: 'journey-sj260820' },
-    { label: 'SJ260821 · 上海—广州—上海', value: 'journey-sj260821' },
-  ],
-  flight: [
-    { label: 'SJX603 · ZGGG → ZGSZ', value: 'flight-sjx603' },
-    { label: 'SJX608 · ZSPD → ZGGG', value: 'flight-sjx608' },
-    { label: 'SJX611 · ZSPD → ZBAA', value: 'flight-sjx611' },
-  ],
-  station: [
-    { label: 'SJX603 · ZGGG 起飞机场', value: 'station-sjx603-zggg' },
-    { label: 'SJX603 · ZGSZ 到达机场', value: 'station-sjx603-zgsz' },
-    { label: 'SJX608 · ZSPD 起飞机场', value: 'station-sjx608-zspd' },
-    { label: 'SJX608 · ZGGG 到达机场', value: 'station-sjx608-zggg' },
-  ],
-};
 
 const ocrItems = ref<OcrItem[]>([
   { id: 'accountName', label: '账户名称', value: 'BOEING DIGITAL SOLUTIONS, INC.', confidence: 99, selected: true },
@@ -130,7 +90,17 @@ const form = ref({
 });
 
 const details = ref<PaymentDetail[]>([
-  { date: '2026-08-24', item: '数据库与航图服务费', attachmentCount: 1, reason: '2026—2027 年度 Jeppesen 基础数据库和障碍物数据库年费', amount: 37404, attributionType: 'company', attributionId: 'company-starjet' },
+  {
+    amount: 37404,
+    attachmentCount: 1,
+    attribution: {
+      items: [{ amount: 37404, id: 'company-starjet', label: '吉星航空', path: '吉星航空', percent: 100, type: 'company' }],
+      mode: 'single',
+    },
+    date: '2026-08-24',
+    item: '数据库与航图服务费',
+    reason: '2026—2027 年度 Jeppesen 基础数据库和障碍物数据库年费',
+  },
 ]);
 
 const totalAmount = computed(() => details.value.reduce((sum, item) => sum + Number(item.amount || 0), 0));
@@ -193,11 +163,14 @@ function goToForm() {
 }
 
 function addDetail() {
-  details.value.push({ date: form.value.applicationDate, item: '', attachmentCount: 0, reason: '', amount: 0, attributionType: 'company', attributionId: 'company-starjet' });
-}
-
-function resetAttribution(detail: PaymentDetail) {
-  detail.attributionId = attributionOptions[detail.attributionType][0]?.value || '';
+  details.value.push({
+    amount: 0,
+    attachmentCount: 0,
+    attribution: { items: [], mode: 'single' },
+    date: form.value.applicationDate,
+    item: '',
+    reason: '',
+  });
 }
 
 function removeDetail(index: number) {
@@ -323,7 +296,7 @@ onBeforeUnmount(() => {
           <header class="form-card-heading"><div><span>03</span><h2>付款明细</h2></div><button class="secondary-button" type="button" @click="addDetail"><PlusIcon />增加明细</button></header>
           <div class="detail-table-wrap">
             <table class="detail-table">
-              <thead><tr><th>日期</th><th>事项</th><th>事由</th><th>附件数</th><th>金额</th><th class="attribution-heading">归属类型</th><th class="attribution-heading">归属对象</th><th></th></tr></thead>
+              <thead><tr><th>日期</th><th>事项</th><th>事由</th><th>附件数</th><th>金额</th><th class="attribution-heading">关联归属</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="(item, index) in details" :key="index">
                   <td><input v-model="item.date" type="date" /></td>
@@ -331,16 +304,7 @@ onBeforeUnmount(() => {
                   <td><input v-model="item.reason" /></td>
                   <td><input v-model.number="item.attachmentCount" min="0" type="number" /></td>
                   <td><input v-model.number="item.amount" min="0" step="0.01" type="number" /></td>
-                  <td>
-                    <select v-model="item.attributionType" aria-label="归属类型" @change="resetAttribution(item)">
-                      <option v-for="type in attributionTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select v-model="item.attributionId" aria-label="归属对象">
-                      <option v-for="option in attributionOptions[item.attributionType]" :key="option.value" :value="option.value">{{ option.label }}</option>
-                    </select>
-                  </td>
+                  <td><AttributionGraphPicker v-model="item.attribution" :amount="Number(item.amount || 0)" /></td>
                   <td><button :disabled="details.length === 1" aria-label="删除明细" class="danger-icon" type="button" @click="removeDetail(index)"><TrashIcon /></button></td>
                 </tr>
               </tbody>
@@ -454,20 +418,20 @@ textarea { resize: vertical; padding: var(--sj-space-3); }
 button:disabled { cursor: not-allowed; opacity: .45; }
 .danger-icon { width: var(--sj-control-dense); height: var(--sj-control-dense); border: 1px solid var(--sj-border); color: var(--sj-red); background: var(--sj-surface-2); }
 .detail-table-wrap { overflow-x: auto; }
-.detail-table { width: 100%; min-width: 1260px; border-collapse: collapse; }
+.detail-table { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 12px; }
 .detail-table th { padding: var(--sj-space-3); color: var(--sj-text-3); font-size: 11px; text-align: left; background: var(--sj-surface-2); }
 .detail-table td { padding: var(--sj-space-2); border-top: 1px solid var(--sj-border); }
+.detail-table input, .detail-table select { font-size: 12px; line-height: 18px; }
 .detail-table th:nth-child(1), .detail-table td:nth-child(1) { width: 150px; }
 .detail-table th:nth-child(2), .detail-table td:nth-child(2) { width: 190px; }
 .detail-table th:nth-child(4), .detail-table td:nth-child(4) { width: 90px; }
 .detail-table th:nth-child(5), .detail-table td:nth-child(5) { width: 150px; }
-.detail-table th:nth-child(6), .detail-table td:nth-child(6) { width: 130px; }
-.detail-table th:nth-child(7), .detail-table td:nth-child(7) { width: 250px; }
+.detail-table th:nth-child(6), .detail-table td:nth-child(6) { width: 250px; }
 .detail-table th:last-child, .detail-table td:last-child { width: 48px; }
 .attribution-heading { color: var(--sj-blue) !important; }
 .total-line { display: flex; align-items: baseline; justify-content: flex-end; gap: var(--sj-space-4); padding: var(--sj-space-4); border-top: 1px solid var(--sj-border); }
-.total-line span { color: var(--sj-text-3); }
-.total-line strong { color: var(--sj-lime); font: 700 20px/1 var(--sj-font-data); }
+.total-line span { color: var(--sj-text-3); font-size: 12px; }
+.total-line strong { color: var(--sj-lime); font: 700 16px/1.25 var(--sj-font-data); }
 .remarks-field { padding: 0 var(--sj-space-4) var(--sj-space-4); }
 .attachment-list { padding: var(--sj-space-2) var(--sj-space-4) var(--sj-space-4); }
 .attachment-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--sj-space-3); padding: var(--sj-space-3); border-bottom: 1px solid var(--sj-border); }

@@ -87,6 +87,19 @@ interface GanttFlightRelation {
   type: 'overlap' | 'turnaround';
 }
 
+interface GanttCardLayout {
+  cardLeft: number;
+  lane: number;
+}
+
+interface TimelineCardLayout {
+  align: 'left' | 'right';
+  collision: boolean;
+  dayWeight: number;
+  height: number;
+  top: number;
+}
+
 interface AirportInfo {
   city: string;
   iata: string;
@@ -111,7 +124,9 @@ const flightPopoverPosition = ref({ left: 0, top: 0 });
 const timelineScrollRef = ref<HTMLElement>();
 const ganttScrollRef = ref<HTMLElement>();
 const timelineHeaderTrackRef = ref<HTMLElement>();
+const timelineScaleRef = ref<HTMLElement>();
 const timelineViewportWidth = ref(0);
+const timelineBaseHeight = ref(640);
 const requestedTimelineDays = ref(5);
 const addDialogVisible = ref(false);
 const inspectorVisible = ref(false);
@@ -122,7 +137,12 @@ const todoOrderAnnouncement = ref('');
 let todoSequence = 20;
 
 const airportInfo: Record<string, AirportInfo> = {
+  EGSS: { city: '伦敦', iata: 'STN', name: '伦敦斯坦斯特德机场', timezone: 'UTC+01:00' },
+  LFPB: { city: '巴黎', iata: 'LBG', name: '巴黎勒布尔歇机场', timezone: 'UTC+02:00' },
+  OMDB: { city: '迪拜', iata: 'DXB', name: '迪拜国际机场', timezone: 'UTC+04:00' },
+  RJTT: { city: '东京', iata: 'HND', name: '东京羽田机场', timezone: 'UTC+09:00' },
   VHHH: { city: '中国香港', iata: 'HKG', name: '香港国际机场', timezone: 'UTC+08:00' },
+  WSSS: { city: '新加坡', iata: 'SIN', name: '新加坡樟宜机场', timezone: 'UTC+08:00' },
   ZBAA: { city: '北京', iata: 'PEK', name: '北京首都国际机场', timezone: 'UTC+08:00' },
   ZGGG: { city: '广州', iata: 'CAN', name: '广州白云国际机场', timezone: 'UTC+08:00' },
   ZGSZ: { city: '深圳', iata: 'SZX', name: '深圳宝安国际机场', timezone: 'UTC+08:00' },
@@ -213,14 +233,24 @@ const flights = ref<FlightPlanItem[]>([
   { aircraft: 'B-801Q', date: '2026-08-25', flightNo: 'SJX802', from: 'ZBAA', fuel: '加油 WFS 待确认', id: 'FP-218', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1730', std: '1500', to: 'ZUUU', type: 'FERRY' },
   { aircraft: 'B-9308', date: '2026-08-26', flightNo: 'SJX308', from: 'ZSPD', fuel: '加油 WFS 已确认', id: 'FP-219', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '0930', std: '0710', to: 'ZGSZ', type: 'PAX' },
   { aircraft: 'B-9308', date: '2026-08-26', flightNo: 'SJX309', from: 'ZGSZ', fuel: '加油 WFS 待确认', id: 'FP-220', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1400', std: '1230', to: 'ZGGG', type: 'PAX' },
+  { aircraft: 'B-9308', date: '2026-08-27', flightNo: 'SJX312', from: 'ZBAA', fuel: '加油 WFS 已确认', id: 'FP-231', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '0300', std: '0030', to: 'ZSPD', type: 'PAX' },
+  { aircraft: 'B-9811', date: '2026-08-27', flightNo: 'SJX125', from: 'RJTT', fuel: '加油 ANA 已确认', id: 'FP-236', permit: '日本离境时刻 已确认', phase: 'confirmed', sta: '0830', std: '0500', to: 'ZBAA', type: 'PAX' },
   { aircraft: 'B-602M', date: '2026-08-27', flightNo: 'SJX606', from: 'ZSPD', fuel: '加油 WFS 已确认', id: 'FP-221', permit: '香港航权批复待确认', phase: 'preparing', sta: '1130', std: '0900', to: 'VHHH', type: 'PAX' },
   { aircraft: 'B-602M', date: '2026-08-27', flightNo: 'SJX607', from: 'VHHH', fuel: '加油 WFS 已确认', id: 'FP-222', permit: 'HK PSP/BAC 已确认', phase: 'confirmed', sta: '1630', std: '1500', to: 'ZGSZ', type: 'FERRY' },
+  { aircraft: 'B-602M', date: '2026-08-28', flightNo: 'SJX610', from: 'ZGSZ', fuel: '加油 WFS 已确认', id: 'FP-232', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '0330', std: '0100', to: 'ZUUU', type: 'PAX' },
+  { aircraft: 'B-9308', date: '2026-08-28', flightNo: 'SJX314', from: 'WSSS', fuel: '加油 SATS 已确认', id: 'FP-237', permit: '新加坡离境许可 已确认', phase: 'confirmed', sta: '0500', std: '0100', to: 'VHHH', type: 'PAX' },
   { aircraft: 'B-9811', date: '2026-08-28', flightNo: 'SJX121', from: 'ZGSZ', fuel: '加油 WFS 已确认', id: 'FP-223', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1110', std: '0800', to: 'ZBAA', type: 'PAX' },
   { aircraft: 'B-9811', date: '2026-08-28', flightNo: 'SJX122', from: 'ZBAA', fuel: '加油 WFS 待确认', id: 'FP-224', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1645', std: '1430', to: 'ZSPD', type: 'PAX' },
+  { aircraft: 'B-9811', date: '2026-08-29', flightNo: 'SJX124', from: 'ZBAA', fuel: '加油 WFS 已确认', id: 'FP-233', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '0430', std: '0130', to: 'ZGGG', type: 'PAX' },
+  { aircraft: 'B-602M', date: '2026-08-29', flightNo: 'SJX612', from: 'OMDB', fuel: '加油 Jet Aviation 待确认', id: 'FP-238', permit: '阿联酋航权批复待确认', phase: 'preparing', sta: '1200', std: '0430', to: 'ZBAA', type: 'PAX' },
   { aircraft: 'B-9308', date: '2026-08-29', flightNo: 'SJX310', from: 'ZSPD', fuel: '加油 WFS 待确认', id: 'FP-225', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1035', std: '0730', to: 'ZUUU', type: 'PAX' },
   { aircraft: 'B-801Q', date: '2026-08-29', flightNo: 'MX-802', from: 'ZUUU', fuel: '加油不适用', id: 'FP-226', permit: '机务窗口 已确认', phase: 'maintenance', sta: '1800', std: '1200', to: 'ZUUU', type: 'MX' },
+  { aircraft: 'B-9308', date: '2026-08-30', flightNo: 'SJX313', from: 'ZSPD', fuel: '加油 WFS 已确认', id: 'FP-234', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '0200', std: '0000', to: 'ZGSZ', type: 'FERRY' },
+  { aircraft: 'B-9811', date: '2026-08-30', flightNo: 'SJX126', from: 'EGSS', fuel: '加油 Signature 已确认', id: 'FP-239', permit: '英国离境时刻 已确认', phase: 'confirmed', sta: '1300', std: '0600', to: 'OMDB', type: 'PAX' },
   { aircraft: 'B-602M', date: '2026-08-30', flightNo: 'SJX608', from: 'ZGSZ', fuel: '加油 WFS 已确认', id: 'FP-227', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1200', std: '0900', to: 'ZBAA', type: 'PAX' },
   { aircraft: 'B-602M', date: '2026-08-30', flightNo: 'SJX609', from: 'ZBAA', fuel: '加油 WFS 已确认', id: 'FP-228', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1735', std: '1530', to: 'ZSSS', type: 'PAX' },
+  { aircraft: 'B-602M', date: '2026-08-31', flightNo: 'SJX611', from: 'ZSSS', fuel: '加油 WFS 待确认', id: 'FP-235', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '0400', std: '0130', to: 'ZBAA', type: 'PAX' },
+  { aircraft: 'B-801Q', date: '2026-08-31', flightNo: 'SJX803', from: 'LFPB', fuel: '加油 Jetex 已确认', id: 'FP-240', permit: '欧盟离境时刻 已确认', phase: 'confirmed', sta: '1500', std: '0500', to: 'ZBAA', type: 'PAX' },
   { aircraft: 'B-9811', date: '2026-08-31', flightNo: 'SJX123', from: 'ZSPD', fuel: '加油 WFS 已确认', id: 'FP-229', permit: '许可 & 地服 已确认', phase: 'confirmed', sta: '1045', std: '0830', to: 'ZBAA', type: 'PAX' },
   { aircraft: 'B-9308', date: '2026-08-31', flightNo: 'SJX311', from: 'ZUUU', fuel: '加油 WFS 待确认', id: 'FP-230', permit: '许可 & 地服 已确认', phase: 'preparing', sta: '1550', std: '1300', to: 'ZSPD', type: 'PAX' },
 ]);
@@ -292,6 +322,129 @@ const ganttCurrentTimeLeft = computed(() => {
   const elapsedDays = displayNow.date() - 1 + (displayNow.hour() * 60 + displayNow.minute()) / 1440;
   return (elapsedDays / days.value.length) * 100;
 });
+const ganttCardLayout = computed(() => {
+  const cardWidth = 184;
+  const cardGap = 8;
+  const cardHeight = 60;
+  const laneGap = 8;
+  const rowPadding = 8;
+  const viewportWidth = timelineViewportWidth.value || 1500;
+  const trackWidth = (viewportWidth / visibleTimelineDays.value) * days.value.length;
+  const totalMinutes = days.value.length * 1440;
+  const layouts = new Map<string, GanttCardLayout>();
+  const rowHeights = new Map<string, number>();
+
+  for (const aircraft of ganttAircrafts.value) {
+    const laneEnds: number[] = [];
+    const records = flightsForAircraft(aircraft)
+      .map((flight) => {
+        const { end, start } = flightAbsoluteRange(flight);
+        const startPixel = (start / totalMinutes) * trackWidth;
+        const endPixel = (end / totalMinutes) * trackWidth;
+        const idealLeft = (startPixel + endPixel) / 2 - cardWidth / 2;
+        return {
+          cardLeft: Math.min(Math.max(idealLeft, 6), Math.max(6, trackWidth - cardWidth - 6)),
+          flight,
+          startPixel,
+        };
+      })
+      .sort((left, right) => left.cardLeft - right.cardLeft);
+
+    for (const record of records) {
+      let lane = laneEnds.findIndex((rightEdge) => record.cardLeft >= rightEdge + cardGap);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = record.cardLeft + cardWidth;
+      layouts.set(record.flight.id, {
+        cardLeft: record.cardLeft - record.startPixel,
+        lane,
+      });
+    }
+
+    const laneCount = Math.max(1, laneEnds.length);
+    rowHeights.set(
+      aircraft,
+      rowPadding * 2 + laneCount * cardHeight + (laneCount - 1) * laneGap,
+    );
+  }
+
+  return { layouts, rowHeights };
+});
+const timelineCardLayout = computed(() => {
+  const layouts = new Map<string, TimelineCardLayout>();
+  const dayWeights: number[] = [];
+  const baseHeight = timelineBaseHeight.value;
+  let maxBottom = baseHeight;
+
+  for (const day of days.value) {
+    const dayFlights = flightsForDay(day.key)
+      .slice()
+      .sort((left, right) => getFlightDepartureDateTime(left).valueOf() - getFlightDepartureDateTime(right).valueOf());
+    const records = dayFlights.map((flight) => {
+      const departure = getFlightDepartureDateTime(flight);
+      const startMinute = departure.hour() * 60 + departure.minute();
+      return {
+        anchorTop: (startMinute / 1440) * baseHeight,
+        flight,
+        height: getTimelineCardHeight(flight),
+      };
+    });
+    const collisionIds = new Set<string>();
+    for (let index = 0; index < records.length; index += 1) {
+      const current = records[index];
+      if (!current) continue;
+      for (let nextIndex = index + 1; nextIndex < records.length; nextIndex += 1) {
+        const next = records[nextIndex];
+        if (!next) break;
+        const overlapHeight = current.anchorTop + current.height - next.anchorTop;
+        if (overlapHeight <= 0) break;
+        const overlapRatio = overlapHeight / Math.min(current.height, next.height);
+        if (overlapRatio < 0.5) continue;
+        collisionIds.add(current.flight.id);
+        collisionIds.add(next.flight.id);
+      }
+    }
+    const dayWeight = collisionIds.size > 0 ? 1.55 : 1;
+    dayWeights.push(dayWeight);
+    let collisionDepth = 0;
+
+    for (const { anchorTop, flight, height } of records) {
+      const isCollision = collisionIds.has(flight.id);
+
+      collisionDepth = isCollision ? collisionDepth + 1 : 0;
+      layouts.set(flight.id, {
+        align: collisionDepth % 2 === 1 ? 'left' : 'right',
+        collision: isCollision,
+        dayWeight,
+        height,
+        top: anchorTop + (isCollision ? (collisionDepth - 1) * 4 : 0),
+      });
+      maxBottom = Math.max(maxBottom, anchorTop + height + (isCollision ? (collisionDepth - 1) * 4 : 0));
+    }
+  }
+
+  return {
+    dayWeights,
+    layouts,
+    overflowSpace: Math.max(0, Math.ceil(maxBottom - baseHeight + 16)),
+  };
+});
+const flightTimelineStyle = computed<CSSProperties>(() => {
+  const unitWidth = timelineViewportWidth.value / visibleTimelineDays.value;
+  const weights = timelineCardLayout.value.dayWeights;
+  return {
+    '--timeline-columns': weights.map((weight) => `${weight}fr`).join(' '),
+    '--timeline-days': days.value.length,
+    width: timelineViewportWidth.value > 0
+      ? `${unitWidth * weights.reduce((total, weight) => total + weight, 0)}px`
+      : `${(weights.reduce((total, weight) => total + weight, 0) * 100) / visibleTimelineDays.value}%`,
+  };
+});
+const timelineBodyStyle = computed<CSSProperties>(() => ({
+  '--timeline-overflow-space': `${timelineCardLayout.value.overflowSpace}px`,
+}));
+const currentTimeLineStyle = computed<CSSProperties>(() => ({
+  top: `calc(var(--timeline-base-height) * ${currentTimeTop.value / 100})`,
+}));
 const selectedFlightTodos = computed(() => selectedFlight.value
   ? (flightTodos[selectedFlight.value.id] ?? [])
   : []);
@@ -379,9 +532,13 @@ function ensureFlightTodos(flight: FlightPlanItem) {
   flightTodos[flight.id] = buildDefaultTodos(flight);
 }
 
-function formatFlightTime(time: string) {
+function formatFlightTime(
+  time: string,
+  flight?: FlightPlanItem,
+  location: 'arrival' | 'departure' = 'departure',
+) {
   const sourceMinutes = flightTimeToMinutes(time);
-  const offset = getDisplayOffsetMinutes();
+  const offset = getDisplayOffsetMinutes(flight, location);
   const value = (sourceMinutes + offset) % 1440;
   const suffix = timeBase.value === 'UTC' ? 'Z' : ` ${timeBase.value}`;
   return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}${suffix}`;
@@ -394,11 +551,17 @@ function getTimezoneOffsetMinutes(value: string) {
   return match[1] === '-' ? -minutes : minutes;
 }
 
-function getDisplayOffsetMinutes(flight?: FlightPlanItem) {
+function getDisplayOffsetMinutes(
+  flight?: FlightPlanItem,
+  location: 'arrival' | 'departure' = 'departure',
+) {
   if (timeBase.value === 'UTC') return 0;
   if (timeBase.value === 'BJ') return 8 * 60;
+  const airport = flight
+    ? location === 'arrival' ? flight.to : flight.from
+    : undefined;
   return getTimezoneOffsetMinutes(
-    flight ? getAirportInfo(flight.from).timezone : timezone.value,
+    airport ? getAirportInfo(airport).timezone : timezone.value,
   );
 }
 
@@ -479,22 +642,6 @@ function getGanttFlightRelations(aircraft: string): GanttFlightRelation[] {
   });
 }
 
-function getGanttRelationStyle(relation: GanttFlightRelation): CSSProperties {
-  const totalMinutes = days.value.length * 1440;
-  return {
-    left: `${(relation.startMinute / totalMinutes) * 100}%`,
-    width: `${Math.max(((relation.endMinute - relation.startMinute) / totalMinutes) * 100, 0.18)}%`,
-  };
-}
-
-function formatGanttRelationDuration(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return [hours ? `${hours}小时` : '', remainingMinutes ? `${remainingMinutes}分` : '']
-    .filter(Boolean)
-    .join('') || '0分';
-}
-
 function hasGanttOverlap(flight: FlightPlanItem) {
   return ganttFlightRelations.value.some((relation) =>
     relation.type === 'overlap' &&
@@ -502,35 +649,28 @@ function hasGanttOverlap(flight: FlightPlanItem) {
   );
 }
 
-function aircraftHasGanttOverlap(aircraft: string) {
-  return ganttFlightRelations.value.some((relation) =>
-    relation.type === 'overlap' && relation.aircraft === aircraft,
-  );
-}
-
-function getGanttOverlapRole(flight: FlightPlanItem) {
-  const relation = ganttFlightRelations.value.find((item) =>
-    item.type === 'overlap' &&
-    (item.fromFlightId === flight.id || item.toFlightId === flight.id),
-  );
-  if (!relation) return undefined;
-  return relation.fromFlightId === flight.id ? 'overlap-before' : 'overlap-after';
-}
-
 function getGanttBarStyle(flight: FlightPlanItem): CSSProperties {
-  const departure = getFlightDepartureDateTime(flight);
-  const startMinute = departure.hour() * 60 + departure.minute();
-  const endMinute = flightTimeToMinutes(flight.sta);
-  const sourceStartMinute = flightTimeToMinutes(flight.std);
-  const duration = endMinute >= sourceStartMinute
-    ? endMinute - sourceStartMinute
-    : 1440 - sourceStartMinute + endMinute;
-  const dayIndex = departure.date() - 1;
+  const { end, start } = flightAbsoluteRange(flight);
   const totalMinutes = days.value.length * 1440;
+  const layout = ganttCardLayout.value.layouts.get(flight.id);
   return {
     ...getAircraftStyle(flight.aircraft),
-    left: `${((dayIndex * 1440 + startMinute) / totalMinutes) * 100}%`,
-    width: `${Math.max((duration / totalMinutes) * 100, 0.35)}%`,
+    left: `${(start / totalMinutes) * 100}%`,
+    top: `${8 + (layout?.lane ?? 0) * 68}px`,
+    width: `${Math.max(((end - start) / totalMinutes) * 100, 0.03)}%`,
+  };
+}
+
+function getGanttCardStyle(flight: FlightPlanItem): CSSProperties {
+  const layout = ganttCardLayout.value.layouts.get(flight.id);
+  return {
+    left: `${layout?.cardLeft ?? 0}px`,
+  };
+}
+
+function getGanttRowStyle(aircraft: string): CSSProperties {
+  return {
+    '--gantt-row-height': `${ganttCardLayout.value.rowHeights.get(aircraft) ?? 76}px`,
   };
 }
 
@@ -557,27 +697,43 @@ function getTurnaroundLabel(flight: FlightPlanItem) {
   return `过站 ${duration || '0分'}`;
 }
 
-function getCardStyle(flight: FlightPlanItem, index: number): CSSProperties {
-  const departure = getFlightDepartureDateTime(flight);
-  const startMinute = departure.hour() * 60 + departure.minute();
-  const top = Math.max(0.8, Math.min(94, (startMinute / 1440) * 100));
+function getTimelineCardHeight(flight: FlightPlanItem) {
+  const todoRows = todosForFlight(flight).length;
+  const mainContentHeight = getTurnaroundLabel(flight) ? 90 : 72;
+  const todoContentHeight = 16 + todoRows * 17 + Math.max(0, todoRows - 1) * 4;
+  return Math.max(mainContentHeight, Math.min(124, todoContentHeight));
+}
+
+function getTimelineHourTop(hour: number) {
+  return `calc(var(--timeline-base-height) * ${hour / 24})`;
+}
+
+function getCardStyle(flight: FlightPlanItem): CSSProperties {
   const todos = todosForFlight(flight);
   const longestTodo = Math.max(0, ...todos.map((todo) => Math.min(Array.from(todo.content).length, 15)));
   const preferredTodosWidth = Math.max(
     96,
     Math.min(176, longestTodo * 6.5 + Math.min(todos.length, 6) * 6),
   );
-  const columnWidth = timelineViewportWidth.value > 0
+  const baseColumnWidth = timelineViewportWidth.value > 0
     ? timelineViewportWidth.value / visibleTimelineDays.value
     : 300;
-  const maxCardWidth = Math.max(220, columnWidth - 14);
+  const layout = timelineCardLayout.value.layouts.get(flight.id);
+  const dayColumnWidth = baseColumnWidth * (layout?.dayWeight ?? 1);
+  const maxCardWidth = Math.max(128, dayColumnWidth - 14);
   const todosWidth = Math.min(preferredTodosWidth, maxCardWidth * 0.48);
-  const cardWidth = Math.min(maxCardWidth, 180 + todosWidth);
+  const cardWidth = Math.min(maxCardWidth, 240);
   return {
     ...getAircraftStyle(flight.aircraft),
     '--card-width': `${cardWidth}px`,
+    '--stagger-offset': '0px',
     '--todos-width': `${todosWidth}px`,
-    top: `calc(${top}% + ${(index % 2) * 5}px)`,
+    height: `${layout?.height ?? getTimelineCardHeight(flight)}px`,
+    left: layout?.collision && layout.align === 'left' ? '7px' : 'auto',
+    maxWidth: `${cardWidth}px`,
+    right: layout?.collision && layout.align === 'left' ? 'auto' : '7px',
+    top: `${layout?.top ?? 0}px`,
+    width: `${cardWidth}px`,
   };
 }
 
@@ -743,7 +899,7 @@ let dragStartScrollLeft = 0;
 let dragging = false;
 
 function onTimelinePointerDown(event: PointerEvent) {
-  if ((event.target as HTMLElement).closest('.flight-card, .gantt-flight-bar')) return;
+  if ((event.target as HTMLElement).closest('.flight-card, .gantt-flight-card')) return;
   const scroller = viewMode.value === 'gantt'
     ? ganttScrollRef.value
     : timelineScrollRef.value;
@@ -806,11 +962,16 @@ async function setupTimelineResizeObserver() {
   if (!scroller) return;
 
   updateTimelineViewport(scroller.getBoundingClientRect().width);
-  timelineResizeObserver = new ResizeObserver(([entry]) => {
-    if (!entry) return;
-    updateTimelineViewport(entry.contentRect.width);
+  const scale = timelineScaleRef.value;
+  if (scale) timelineBaseHeight.value = scale.getBoundingClientRect().height;
+  timelineResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.target === scroller) updateTimelineViewport(entry.contentRect.width);
+      if (entry.target === scale) timelineBaseHeight.value = entry.contentRect.height;
+    }
   });
   timelineResizeObserver.observe(scroller);
+  if (scale) timelineResizeObserver.observe(scale);
   await scrollToDay(selectedDay.value, 'auto');
 }
 
@@ -901,7 +1062,7 @@ onBeforeUnmount(() => {
           <div
             ref="timelineHeaderTrackRef"
             class="timeline-header timeline-track"
-            :style="timelineStyle"
+            :style="flightTimelineStyle"
           >
             <div
               v-for="day in days"
@@ -926,8 +1087,9 @@ onBeforeUnmount(() => {
         @pointerup="onTimelinePointerUp"
         @pointercancel="onTimelinePointerUp"
       >
-        <div class="timeline-track" :style="timelineStyle">
-          <div class="timeline-body">
+        <div class="timeline-track" :style="flightTimelineStyle">
+          <div class="timeline-body" :style="timelineBodyStyle">
+            <span ref="timelineScaleRef" aria-hidden="true" class="timeline-scale-measure"></span>
             <section
               v-for="day in days"
               :key="day.key"
@@ -940,28 +1102,27 @@ onBeforeUnmount(() => {
                 v-for="hour in [0, 6, 12, 18, 24]"
                 :key="hour"
                 class="hour-line"
-                :style="{ top: `${(hour / 24) * 100}%` }"
+                :style="{ top: getTimelineHourTop(hour) }"
               ><i>{{ String(hour).padStart(2, '0') }}:00</i></span>
               <span
                 v-if="day.isToday"
                 class="current-time-line"
-                :style="{ top: `${currentTimeTop}%` }"
+                :style="currentTimeLineStyle"
                 :title="`当前时间 ${currentTimeLabel}`"
               ><i>{{ currentTimeLabel }}</i></span>
-              <button
-                v-for="(flight, index) in flightsForDay(day.key)"
-                :key="flight.id"
+              <template v-for="flight in flightsForDay(day.key)" :key="flight.id">
+                <button
                 type="button"
                 class="flight-card"
                 :class="`phase-${flight.phase}`"
-                :style="getCardStyle(flight, index)"
-                :aria-label="`${flight.type} ${flight.aircraft}，${flight.from} ${formatFlightTime(flight.std)} 至 ${flight.to} ${formatFlightTime(flight.sta)}，${todosForFlight(flight).length} 项待办`"
+                :style="getCardStyle(flight)"
+                :aria-label="`${flight.type} ${flight.aircraft}，${flight.from} ${formatFlightTime(flight.std, flight)} 至 ${flight.to} ${formatFlightTime(flight.sta, flight, 'arrival')}，${todosForFlight(flight).length} 项待办`"
                 @click="openFlight(flight)"
                 @mouseenter="showFlightPopover(flight, $event)"
                 @mouseleave="hideFlightPopover"
                 @focus="showFlightPopover(flight, $event)"
                 @blur="hideFlightPopover"
-              >
+                >
                 <span class="flight-main">
                   <span class="flight-card-head">
                     <span>
@@ -971,9 +1132,9 @@ onBeforeUnmount(() => {
                   </span>
                   <small v-if="getTurnaroundLabel(flight)" class="flight-turnaround" title="可用过站时间">{{ getTurnaroundLabel(flight) }}</small>
                   <span class="flight-route">
-                    <span><b class="airport-code">{{ flight.from }}</b><time>{{ formatFlightTime(flight.std) }}</time></span>
+                    <span><b class="airport-code">{{ flight.from }}</b><time>{{ formatFlightTime(flight.std, flight) }}</time></span>
                     <em>→</em>
-                    <span><b class="airport-code">{{ flight.to }}</b><time>{{ formatFlightTime(flight.sta) }}</time></span>
+                    <span><b class="airport-code">{{ flight.to }}</b><time>{{ formatFlightTime(flight.sta, flight, 'arrival') }}</time></span>
                   </span>
                 </span>
                 <span class="flight-card-todos" aria-label="待办事项">
@@ -987,7 +1148,8 @@ onBeforeUnmount(() => {
                     ><TriangleAlertIcon v-if="indicatorMode === 'shapes' && todo.status === 'blocked'" aria-hidden="true" /><template v-else>{{ indicatorMode !== 'lights' ? todoStatusSymbol(todo.status) : '' }}</template></b>
                   </span>
                 </span>
-              </button>
+                </button>
+              </template>
             </section>
           </div>
         </div>
@@ -998,7 +1160,7 @@ onBeforeUnmount(() => {
       <div class="gantt-layout">
         <div class="gantt-aircraft-column">
           <header><span>AIRCRAFT</span><small>注册号 / 月度任务</small></header>
-          <div v-for="aircraft in ganttAircrafts" :key="aircraft" :class="{ 'has-conflict': aircraftHasGanttOverlap(aircraft) }" :style="getAircraftStyle(aircraft)">
+          <div v-for="aircraft in ganttAircrafts" :key="aircraft" :style="[getAircraftStyle(aircraft), getGanttRowStyle(aircraft)]">
             <strong class="aircraft-color-label">{{ aircraft }}</strong>
             <span>{{ flightsForAircraft(aircraft).length }} 个任务</span>
           </div>
@@ -1025,54 +1187,54 @@ onBeforeUnmount(() => {
               </div>
             </header>
             <div class="gantt-rows">
-              <section v-for="aircraft in ganttAircrafts" :key="aircraft" :class="['gantt-row', { 'has-conflict': aircraftHasGanttOverlap(aircraft) }]">
+              <section v-for="aircraft in ganttAircrafts" :key="aircraft" class="gantt-row" :style="getGanttRowStyle(aircraft)">
                 <div class="gantt-day-grid" aria-hidden="true">
                   <div v-for="day in days" :key="day.key" :class="{ today: day.isToday }">
                     <i></i><i></i><i></i>
                   </div>
                 </div>
                 <span
-                  v-for="relation in getGanttFlightRelations(aircraft)"
-                  :key="`${relation.fromFlightId}-${relation.toFlightId}`"
-                  :class="['gantt-relation', relation.type]"
-                  :style="getGanttRelationStyle(relation)"
-                  :aria-label="relation.type === 'overlap' ? `航段重叠 ${formatGanttRelationDuration(relation.durationMinutes)}` : `可用过站时间 ${formatGanttRelationDuration(relation.durationMinutes)}`"
-                  :title="relation.type === 'overlap' ? `警告：航段重叠 ${formatGanttRelationDuration(relation.durationMinutes)}` : `可用过站时间 ${formatGanttRelationDuration(relation.durationMinutes)}`"
-                >
-                  <CircleAlert v-if="relation.type === 'overlap'" aria-hidden="true" />
-                  {{ relation.type === 'overlap' ? '航段重叠' : '过站' }} {{ formatGanttRelationDuration(relation.durationMinutes) }}
-                </span>
-                <button
                   v-for="flight in flightsForAircraft(aircraft)"
                   :key="flight.id"
-                  :class="['gantt-flight-bar', `phase-${flight.phase}`, getGanttOverlapRole(flight), { 'has-overlap': hasGanttOverlap(flight) }]"
+                  :class="['gantt-flight-slot', { 'has-overlap': hasGanttOverlap(flight) }]"
                   :style="getGanttBarStyle(flight)"
-                  :title="`${flight.flightNo} · ${flight.from} ${formatFlightTime(flight.std)} → ${flight.to} ${formatFlightTime(flight.sta)}`"
-                  type="button"
-                  @click="openFlight(flight)"
-                  @mouseenter="showFlightPopover(flight, $event)"
-                  @mouseleave="hideFlightPopover"
-                  @focus="showFlightPopover(flight, $event)"
-                  @blur="hideFlightPopover"
                 >
-                  <span class="gantt-bar-head">
-                    <strong class="flight-type-tag"><component :is="flightTypeIcons[flight.type]" aria-hidden="true" />{{ flight.type }}</strong>
-                    <span class="gantt-bar-status" aria-label="待办事项状态">
-                      <i
-                        v-for="todo in todosForFlight(flight).slice(0, 4)"
-                        :key="todo.id"
-                        class="todo-status-light"
-                        :class="[{ 'with-symbol': indicatorMode !== 'lights' }, { 'color-vision': indicatorMode === 'shapes' }, `status-${getTodoStatus(todo.status).color}`]"
-                        :title="`${todo.content} · ${getTodoStatus(todo.status).label}`"
-                      ><TriangleAlertIcon v-if="indicatorMode === 'shapes' && todo.status === 'blocked'" aria-hidden="true" /><template v-else>{{ indicatorMode !== 'lights' ? todoStatusSymbol(todo.status) : '' }}</template></i>
+                  <span class="gantt-flight-duration" aria-hidden="true"></span>
+                  <button
+                    :class="['gantt-flight-card', `phase-${flight.phase}`, { 'has-overlap': hasGanttOverlap(flight) }]"
+                    :style="getGanttCardStyle(flight)"
+                    :aria-label="`${flight.type} ${flight.flightNo}，${flight.aircraft}，${flight.from} ${formatFlightTime(flight.std, flight)} 至 ${flight.to} ${formatFlightTime(flight.sta, flight, 'arrival')}`"
+                    :title="`${flight.flightNo} · ${flight.from} ${formatFlightTime(flight.std, flight)} → ${flight.to} ${formatFlightTime(flight.sta, flight, 'arrival')}`"
+                    type="button"
+                    @click="openFlight(flight)"
+                    @mouseenter="showFlightPopover(flight, $event)"
+                    @mouseleave="hideFlightPopover"
+                    @focus="showFlightPopover(flight, $event)"
+                    @blur="hideFlightPopover"
+                  >
+                    <span class="gantt-bar-head">
+                      <span class="gantt-flight-identity">
+                        <strong class="flight-type-tag"><component :is="flightTypeIcons[flight.type]" aria-hidden="true" />{{ flight.type }}</strong>
+                        <b>{{ flight.flightNo }}</b>
+                        <em class="aircraft-color-label">{{ flight.aircraft }}</em>
+                      </span>
+                      <span class="gantt-bar-status" aria-label="待办事项状态">
+                        <i
+                          v-for="todo in todosForFlight(flight).slice(0, 3)"
+                          :key="todo.id"
+                          class="todo-status-light"
+                          :class="[{ 'with-symbol': indicatorMode !== 'lights' }, { 'color-vision': indicatorMode === 'shapes' }, `status-${getTodoStatus(todo.status).color}`]"
+                          :title="`${todo.content} · ${getTodoStatus(todo.status).label}`"
+                        ><TriangleAlertIcon v-if="indicatorMode === 'shapes' && todo.status === 'blocked'" aria-hidden="true" /><template v-else>{{ indicatorMode !== 'lights' ? todoStatusSymbol(todo.status) : '' }}</template></i>
+                      </span>
                     </span>
-                  </span>
-                  <span class="gantt-bar-route">
-                    <span><b>{{ flight.from }}</b><time>{{ formatFlightTime(flight.std) }}</time></span>
-                    <i>→</i>
-                    <span><b>{{ flight.to }}</b><time>{{ formatFlightTime(flight.sta) }}</time></span>
-                  </span>
-                </button>
+                    <span class="gantt-bar-route">
+                      <span><b>{{ flight.from }}</b><time>{{ formatFlightTime(flight.std, flight) }}</time></span>
+                      <i>→</i>
+                      <span><b>{{ flight.to }}</b><time>{{ formatFlightTime(flight.sta, flight, 'arrival') }}</time></span>
+                    </span>
+                  </button>
+                </span>
               </section>
             </div>
             <span
@@ -1102,7 +1264,7 @@ onBeforeUnmount(() => {
         <ElTableColumn label="日期" width="120"><template #default="{ row }">{{ getFlightDisplayDate(row) }}</template></ElTableColumn>
         <ElTableColumn label="注册号" width="110"><template #default="{ row }"><span class="aircraft-color-label" :style="getAircraftStyle(row.aircraft)">{{ row.aircraft }}</span></template></ElTableColumn>
         <ElTableColumn label="类型" width="100"><template #default="{ row }"><span class="flight-type-tag"><component :is="flightTypeIcons[row.type as FlightType]" aria-hidden="true" />{{ row.type }}</span></template></ElTableColumn>
-        <ElTableColumn label="航段"><template #default="{ row }">{{ row.from }} {{ formatFlightTime(row.std) }} - {{ formatFlightTime(row.sta) }} {{ row.to }}</template></ElTableColumn>
+        <ElTableColumn label="航段"><template #default="{ row }">{{ row.from }} {{ formatFlightTime(row.std, row) }} - {{ formatFlightTime(row.sta, row, 'arrival') }} {{ row.to }}</template></ElTableColumn>
         <ElTableColumn label="待办事项"><template #default="{ row }">{{ todosForFlight(row).map((todo) => todo.content).join(' / ') }}</template></ElTableColumn>
         <ElTableColumn label="操作" width="90"><template #default="{ row }"><ElButton link type="primary" @click="openFlight(row)">查看</ElButton></template></ElTableColumn>
       </ElTable>
@@ -1112,7 +1274,7 @@ onBeforeUnmount(() => {
       <aside v-if="hoveredFlight" class="flight-hover-popover sj-mission-control" :style="flightPopoverPosition" aria-live="polite">
         <header><span>{{ hoveredFlight.type }}</span><strong>{{ hoveredFlight.flightNo }}</strong><b>{{ hoveredFlight.aircraft }}</b></header>
         <div class="hover-route"><strong>{{ hoveredFlight.from }}</strong><i>→</i><strong>{{ hoveredFlight.to }}</strong></div>
-        <p>{{ getFlightDisplayDate(hoveredFlight) }} · {{ formatFlightTime(hoveredFlight.std) }}–{{ formatFlightTime(hoveredFlight.sta) }} · {{ flightDuration(hoveredFlight) }}</p>
+        <p>{{ getFlightDisplayDate(hoveredFlight) }} · {{ formatFlightTime(hoveredFlight.std, hoveredFlight) }}–{{ formatFlightTime(hoveredFlight.sta, hoveredFlight, 'arrival') }} · {{ flightDuration(hoveredFlight) }}</p>
         <ul><li v-for="todo in todosForFlight(hoveredFlight).slice(0, 3)" :key="todo.id"><b :class="`status-${getTodoStatus(todo.status).color}`">{{ todoStatusSymbol(todo.status) }}</b><span>{{ cleanTodoContent(todo.content) }}</span></li></ul>
       </aside>
     </Teleport>
@@ -1145,14 +1307,14 @@ onBeforeUnmount(() => {
               <strong>{{ selectedFlight.from }}</strong>
               <p>{{ selectedDepartureAirport?.name }}</p>
               <small>{{ selectedDepartureAirport?.timezone }}</small>
-              <time>{{ formatFlightTime(selectedFlight.std) }}</time>
+              <time>{{ formatFlightTime(selectedFlight.std, selectedFlight) }}</time>
             </div>
             <span><i></i><b>→</b><i></i></span>
             <div>
               <strong>{{ selectedFlight.to }}</strong>
               <p>{{ selectedArrivalAirport?.name }}</p>
               <small>{{ selectedArrivalAirport?.timezone }}</small>
-              <time>{{ formatFlightTime(selectedFlight.sta) }}</time>
+              <time>{{ formatFlightTime(selectedFlight.sta, selectedFlight, 'arrival') }}</time>
             </div>
           </div>
           <div class="summary-facts">
@@ -1287,7 +1449,7 @@ onBeforeUnmount(() => {
 .timeline-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; border: 1px solid #dce3ea; border-top: 0; border-radius: 0 0 10px 10px; background: #fff; cursor: grab; overscroll-behavior-inline: contain; scrollbar-color: rgba(72,96,128,.32) transparent; scroll-snap-type: x proximity; }
 .timeline-scroll.is-dragging { cursor: grabbing; scroll-behavior: auto; user-select: none; }
 .timeline-track { min-width: 100%; }
-.timeline-header, .timeline-body { display: grid; grid-template-columns: repeat(var(--timeline-days), minmax(0,1fr)); }
+.timeline-header, .timeline-body { display: grid; grid-template-columns: var(--timeline-columns, repeat(var(--timeline-days), minmax(0,1fr))); }
 .timeline-header { height: 70px; border-bottom: 1px solid #d9e0e8; background: #fff; will-change: transform; }
 .day-head { display: grid; place-content: center; gap: 3px; color: #202833; text-align: center; scroll-snap-align: start; }
 .day-head span { min-height: 14px; color: #748196; font-size: 11px; }
@@ -1295,17 +1457,20 @@ onBeforeUnmount(() => {
 .day-head small { color: #465264; font-size: 12px; }
 .day-head.today { z-index: 2; border: 2px solid #3f7cff; border-bottom: 0; border-radius: 9px 9px 0 0; }
 .timeline-body {
-  height: 640px;
-  height: clamp(480px, calc(100dvh - 210px), 640px);
+  --timeline-base-height: clamp(480px, calc(100dvh - 210px), 640px);
+  --timeline-overflow-space: 0px;
+  position: relative;
+  height: calc(var(--timeline-base-height) + var(--timeline-overflow-space));
 }
+.timeline-scale-measure { position: absolute; top: 0; left: 0; width: 1px; height: var(--timeline-base-height); visibility: hidden; pointer-events: none; }
 .day-column { position: relative; min-width: 0; border-right: 1px solid #e1e6eb; background: #fff; }
 .day-column:nth-child(even) { background: #f5f5f5; }
 .day-column.today { z-index: 1; border-inline: 2px solid #3f7cff; background: #fff; }
 .hour-line { position: absolute; z-index: 0; left: 0; width: 100%; border-top: 1px solid #e1e5e9; color: #b1b8c0; font-size: 10px; }
 .hour-line i { position: absolute; top: 4px; left: 7px; font-style: normal; }
-.current-time-line { position: absolute; z-index: 3; left: 0; width: 100%; border-top: 1px dashed #f05252; }
+.current-time-line { position: absolute; z-index: 3; left: 0; width: 54px; border-top: 1px dashed #f05252; }
 .current-time-line i { position: absolute; top: -9px; left: 7px; padding-right: 6px; color: #ef4444; font-size: 10px; font-style: normal; background: #fff; }
-.flight-card { position: absolute; z-index: 4; right: 7px; display: grid; grid-template-columns: minmax(0,1fr) minmax(88px,var(--todos-width,120px)); gap: 6px; width: min(calc(100% - 14px),var(--card-width,calc(100% - 14px))); max-width: calc(100% - 14px); min-height: 58px; padding: 8px; overflow: hidden; border: 1px solid #cbd8e6; border-radius: 5px; color: #202833; text-align: left; box-shadow: 0 5px 12px rgba(31,55,79,.07); transition: 160ms ease; }
+.flight-card { position: absolute; z-index: 4; right: 7px; display: grid; box-sizing: border-box; grid-template-columns: minmax(0,1fr) minmax(88px,var(--todos-width,120px)); gap: 6px; width: min(calc(100% - 14px - var(--stagger-offset, 0px)),var(--card-width,calc(100% - 14px))); max-width: calc(100% - 14px - var(--stagger-offset, 0px)); min-height: 58px; padding: 8px; overflow: hidden; border: 1px solid #cbd8e6; border-radius: 5px; color: #202833; text-align: left; box-shadow: 0 5px 12px rgba(31,55,79,.07); transition: 160ms ease; }
 .flight-card:hover, .flight-card:focus-visible { z-index: 8; outline: 2px solid rgba(63,124,255,.36); transform: translateY(-2px); box-shadow: 0 11px 24px rgba(31,55,79,.15); }
 .phase-arrived { border-color: #c9d8e8; background: #eef3f8; }
 .phase-confirmed { border-color: #c4d6ef; background: #edf5ff; }
@@ -1378,7 +1543,7 @@ onBeforeUnmount(() => {
 .gantt-panel { min-width: 0; margin-top: 12px; overflow: hidden; border: 1px solid var(--sj-border); border-radius: var(--sj-radius-panel); background: var(--sj-canvas); }
 .gantt-layout {
   --gantt-card-height: calc(var(--sj-space-6) * 2 + var(--sj-space-3));
-  --gantt-conflict-gap: var(--sj-space-8);
+  --gantt-card-width: 184px;
   display: grid;
   min-width: 0;
   grid-template-columns: 156px minmax(0, 1fr);
@@ -1387,7 +1552,7 @@ onBeforeUnmount(() => {
 .gantt-aircraft-column header { display: grid; height: 64px; padding: var(--sj-space-3); align-content: center; gap: var(--sj-space-1); border-bottom: 1px solid var(--sj-border); }
 .gantt-aircraft-column header span { color: var(--sj-text-1); font: 750 11px var(--sj-font-data); letter-spacing: .12em; }
 .gantt-aircraft-column header small { color: var(--sj-text-3); font-size: 9px; }
-.gantt-aircraft-column > div { display: grid; height: 92px; padding: var(--sj-space-3); align-content: center; gap: var(--sj-space-1); border-bottom: 1px solid var(--sj-border); }
+.gantt-aircraft-column > div { display: grid; height: var(--gantt-row-height, 76px); padding: var(--sj-space-3); align-content: center; gap: var(--sj-space-1); border-bottom: 1px solid var(--sj-border); }
 .gantt-aircraft-column strong { font: 750 14px var(--sj-font-data); letter-spacing: .04em; }
 .gantt-aircraft-column > div span { color: var(--sj-text-3); font: 10px var(--sj-font-data); }
 .gantt-scroll { min-width: 0; overflow-x: auto; cursor: grab; overscroll-behavior-inline: contain; scrollbar-color: var(--sj-border-strong) var(--sj-surface-1); scroll-snap-type: x proximity; }
@@ -1403,13 +1568,11 @@ onBeforeUnmount(() => {
 .gantt-axis > div > i b { padding-left: var(--sj-space-1); color: var(--sj-text-3); font: 8px var(--sj-font-data); }
 .gantt-row {
   position: relative;
-  height: calc(var(--gantt-card-height) + var(--sj-space-2) * 2 + var(--sj-space-4));
+  height: var(--gantt-row-height, 76px);
   overflow: hidden;
   border-bottom: 1px solid var(--sj-border);
   background: var(--sj-canvas);
 }
-.gantt-aircraft-column > div.has-conflict,
-.gantt-row.has-conflict { height: calc(var(--gantt-card-height) * 2 + var(--gantt-conflict-gap) + var(--sj-space-2) * 2); }
 .gantt-row:nth-child(even) { background: var(--sj-surface-1); }
 .gantt-day-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--timeline-days), minmax(0, 1fr)); }
 .gantt-day-grid > div { position: relative; border-right: 1px solid var(--sj-border); }
@@ -1418,16 +1581,18 @@ onBeforeUnmount(() => {
 .gantt-day-grid > div i:nth-child(1) { left: 25%; }
 .gantt-day-grid > div i:nth-child(2) { left: 50%; }
 .gantt-day-grid > div i:nth-child(3) { left: 75%; }
-.gantt-relation { position: absolute; z-index: 4; bottom: var(--sj-space-1); display: flex; min-width: 72px; height: var(--sj-space-4); padding: 0 var(--sj-space-1); overflow: visible; align-items: center; justify-content: center; gap: var(--sj-space-1); pointer-events: none; border: 1px solid var(--sj-blue); border-radius: var(--sj-radius-tag); color: var(--sj-blue); background: var(--sj-surface-4); font: 750 8px var(--sj-font-data); white-space: nowrap; }.gantt-relation::before, .gantt-relation::after { position: absolute; top: 50%; width: var(--sj-space-2); height: 1px; background: currentColor; content: ''; }.gantt-relation::before { right: 100%; }.gantt-relation::after { left: 100%; }.gantt-relation.overlap { z-index: 7; border-color: var(--sj-red); color: var(--sj-red); background: var(--sj-red-soft); }.gantt-relation svg { width: 11px; flex: 0 0 11px; }
-.gantt-flight-bar { position: absolute; z-index: 2; top: var(--sj-space-2); bottom: auto; display: grid; min-width: 118px; height: var(--gantt-card-height); padding: var(--sj-space-2); overflow: hidden; align-content: center; gap: var(--sj-space-1); border: 1px solid color-mix(in srgb, var(--aircraft-color) 62%, var(--sj-border)); border-left: 3px solid var(--aircraft-color); border-radius: var(--sj-radius-control); color: var(--sj-text-1); text-align: left; background: color-mix(in srgb, var(--aircraft-color) 20%, var(--sj-surface-2)); box-shadow: 0 0 0 1px var(--aircraft-soft) inset; cursor: pointer; }
-.gantt-flight-bar:hover, .gantt-flight-bar:focus-visible { z-index: 6; outline: 2px solid var(--sj-blue); outline-offset: -1px; }
-.gantt-flight-bar.has-overlap { z-index: 5; border-color: var(--sj-red); border-left-color: var(--sj-red); box-shadow: 0 0 0 1px var(--sj-red-soft) inset; }
-.gantt-row.has-conflict .gantt-flight-bar.overlap-before { top: var(--sj-space-2); }
-.gantt-row.has-conflict .gantt-flight-bar.overlap-after { top: calc(var(--sj-space-2) + var(--gantt-card-height) + var(--gantt-conflict-gap)); }
-.gantt-row.has-conflict .gantt-relation.overlap { top: calc(var(--sj-space-2) + var(--gantt-card-height) + var(--sj-space-2)); bottom: auto; }
+.gantt-flight-slot { position: absolute; z-index: 2; min-width: var(--sj-space-1); height: var(--gantt-card-height); overflow: visible; pointer-events: none; }
+.gantt-flight-duration { position: absolute; z-index: 4; top: 0; right: 0; left: 0; min-width: var(--sj-space-1); height: var(--sj-space-1); border-radius: var(--sj-radius-tag) var(--sj-radius-tag) 0 0; background: var(--aircraft-color); }
+.gantt-flight-card { position: absolute; z-index: 2; top: 0; display: grid; box-sizing: border-box; width: var(--gantt-card-width); height: var(--gantt-card-height); padding: var(--sj-space-3) var(--sj-space-2) var(--sj-space-2); overflow: hidden; align-content: center; gap: var(--sj-space-1); pointer-events: auto; border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-1); text-align: left; background: var(--sj-surface-3); cursor: pointer; transition: border-color var(--sj-duration-fast), box-shadow var(--sj-duration-fast), background var(--sj-duration-fast); }
+.gantt-flight-card:hover, .gantt-flight-card:focus-visible { z-index: 6; border-color: var(--sj-blue); outline: none; box-shadow: var(--sj-shadow-selected); }
+.gantt-flight-card.has-overlap { z-index: 5; border-color: var(--sj-red); box-shadow: 0 0 0 1px var(--sj-red-soft) inset; }
 .gantt-bar-head { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: var(--sj-space-2); white-space: nowrap; }
-.gantt-bar-route { display: flex; min-width: 0; align-items: center; justify-content: flex-start; gap: var(--sj-space-2); white-space: nowrap; }
+.gantt-flight-identity { display: flex; min-width: 0; align-items: center; gap: 3px; }
+.gantt-flight-identity > b { flex: 0 1 auto; overflow: hidden; color: var(--sj-text-1); font: 750 10px var(--sj-font-data); text-overflow: ellipsis; }
+.gantt-flight-identity > em { flex: 0 0 auto; color: var(--aircraft-color); font: 750 10px var(--sj-font-data); font-style: normal; }
+.gantt-bar-route { display: grid; min-width: 0; align-items: center; justify-content: stretch; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--sj-space-2); white-space: nowrap; }
 .gantt-bar-route > span { display: grid; min-width: 0; gap: 1px; }
+.gantt-bar-route > span:last-child { justify-items: end; text-align: right; }
 .gantt-bar-route b { color: var(--sj-text-1); font: 800 13px var(--sj-font-data); letter-spacing: .04em; }
 .gantt-bar-route time { color: var(--sj-text-3); font: 9px var(--sj-font-data); }
 .gantt-bar-route i { color: var(--sj-text-3); font-style: normal; }
@@ -1485,7 +1650,7 @@ onBeforeUnmount(() => {
 .edit-flight-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 12px; }
 .edit-flight-form :deep(.el-form-item__label) { color: var(--sj-text-2); font-weight: 600; }
 @media (max-width: 1180px) { .toolbar-spacer { display: none; } .timezone-field { margin-left: 0; } }
-@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .gantt-layout { grid-template-columns: 128px minmax(0, 1fr); } .gantt-aircraft-column > div, .gantt-row { height: 86px; } .gantt-flight-bar { min-width: 104px; } }
+@media (max-width: 760px) { .flight-plan-page { padding: 10px; } .plan-toolbar, .timeline-panel, .alternative-panel { padding: 14px; border-radius: 12px; } .toolbar-filters, .date-selectors { flex-wrap: wrap; } .timezone-field, .toolbar-filters label { width: 100%; } .flight-card { grid-template-columns: 1fr; } .flight-card-todos { display: none; } .calendar-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .gantt-layout { grid-template-columns: 128px minmax(0, 1fr); } }
 
 /* Mission Control Dark: opt-in operational workspace skin. */
 .flight-plan-page.sj-mission-control.is-dark {
@@ -1569,7 +1734,7 @@ onBeforeUnmount(() => {
 .sj-mission-control.is-dark .day-head.today { border: 0; border-right: 1px solid #2b4630; border-radius: 0; background: #152118; box-shadow: inset 0 -2px var(--mc-lime); }
 .sj-mission-control.is-dark .day-head.today span { color: var(--mc-lime); }
 .sj-mission-control.is-dark .timeline-scroll { border: 0; border-radius: 0; background: var(--mc-canvas); scrollbar-color: #38445b #0a0d14; }
-.sj-mission-control.is-dark .timeline-body { height: clamp(500px, calc(100dvh - 243px), 742px); }
+.sj-mission-control.is-dark .timeline-body { --timeline-base-height: clamp(500px, calc(100dvh - 243px), 742px); }
 .sj-mission-control.is-dark .day-column,
 .sj-mission-control.is-dark .day-column:nth-child(even) { border-right-color: var(--mc-line); background-color: var(--mc-canvas); background-image: linear-gradient(90deg, rgba(31,39,53,.2) 1px, transparent 1px); background-size: 25% 100%; }
 .sj-mission-control.is-dark .day-column:nth-child(even) { background-color: #090b11; }
@@ -1585,6 +1750,15 @@ onBeforeUnmount(() => {
 .sj-mission-control.is-dark .phase-preparing,
 .sj-mission-control.is-dark .phase-maintenance,
 .sj-mission-control.is-dark .phase-aog { border-color: color-mix(in srgb, var(--aircraft-color) 58%, var(--sj-border)); background: color-mix(in srgb, var(--aircraft-color) 22%, var(--sj-surface-2)); box-shadow: 0 0 16px var(--aircraft-soft); }
+.sj-mission-control.is-dark .gantt-flight-card,
+.sj-mission-control.is-dark .gantt-flight-card.phase-arrived,
+.sj-mission-control.is-dark .gantt-flight-card.phase-confirmed,
+.sj-mission-control.is-dark .gantt-flight-card.phase-preparing,
+.sj-mission-control.is-dark .gantt-flight-card.phase-maintenance,
+.sj-mission-control.is-dark .gantt-flight-card.phase-aog { border-color: var(--sj-border-strong); background: var(--sj-surface-3); box-shadow: none; }
+.sj-mission-control.is-dark .gantt-flight-card.has-overlap { border-color: var(--sj-red); box-shadow: 0 0 0 1px var(--sj-red-soft) inset; }
+.sj-mission-control.is-dark .gantt-flight-card:hover,
+.sj-mission-control.is-dark .gantt-flight-card:focus-visible { border-color: var(--sj-blue); background: var(--sj-surface-4); box-shadow: var(--sj-shadow-selected); }
 .sj-mission-control.is-dark .flight-main .aircraft-color-label { color: var(--aircraft-color); font-family: var(--sj-font-data); font-size: 12px; letter-spacing: .04em; }
 .sj-mission-control.is-dark .flight-route { color: var(--sj-text-1); font-family: var(--sj-font-data); }
 .sj-mission-control.is-dark .flight-route .airport-code { color: var(--sj-text-1); font-size: 15px; letter-spacing: .03em; }
@@ -1626,7 +1800,7 @@ onBeforeUnmount(() => {
   .sj-mission-control.is-dark .timeline-panel,
   .sj-mission-control.is-dark .alternative-panel { padding: 0; border-radius: 0; }
   .sj-mission-control.is-dark .flight-card-todos { display: grid; }
-  .sj-mission-control.is-dark .timeline-body { height: 610px; }
+  .sj-mission-control.is-dark .timeline-body { --timeline-base-height: 610px; }
 }
 
 .flight-hover-popover { position: fixed; z-index: 5000; width: 320px; padding: var(--sj-space-4); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-overlay); color: var(--sj-text-1); background: var(--sj-surface-4); box-shadow: var(--sj-shadow-panel); pointer-events: none; }
