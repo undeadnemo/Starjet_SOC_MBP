@@ -50,6 +50,12 @@ function setupAccessGuard(router: Router) {
     const userStore = useUserStore();
     const authStore = useAuthStore();
 
+    // 预览等显式公开路由必须独立于本地登录缓存和后端会话。
+    // 否则浏览器残留 accessToken 时仍会请求 /auth/me，后端未启动便会卡在加载页。
+    if (to.meta.ignoreAccess) {
+      return true;
+    }
+
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
@@ -64,11 +70,6 @@ function setupAccessGuard(router: Router) {
 
     // accessToken 检查
     if (!accessStore.accessToken) {
-      // 明确声明忽略权限访问权限，则可以访问
-      if (to.meta.ignoreAccess) {
-        return true;
-      }
-
       // 没有访问权限，跳转登录页面
       if (to.fullPath !== LOGIN_PATH) {
         return {

@@ -62,6 +62,8 @@ CSS 唯一事实来源：`apps/web-ele/src/styles/starjet-mission-control-dark.c
 | `--sj-text-3` | `#727e90` | 时间戳和元数据 |
 | `--sj-text-disabled` | `#4a5565` | 仅用于禁用内容 |
 
+浅色模式下，`--sj-text-3` 使用 `#627083`，确保 11px 元数据文字在规范中的页面与卡片底色上达到 WCAG AA 对比度。
+
 ### 语义颜色
 
 | 令牌 | 数值 | 含义 |

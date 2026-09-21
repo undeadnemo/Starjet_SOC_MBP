@@ -76,6 +76,9 @@ unless a chart needs an approved series color that is not yet tokenized.
 | `--sj-text-3` | `#727e90` | Timestamps and metadata |
 | `--sj-text-disabled` | `#4a5565` | Disabled content only |
 
+In light mode, `--sj-text-3` uses `#627083` so 11px metadata remains at or
+above WCAG AA contrast on the approved canvas and surface tokens.
+
 ### Semantic color
 
 | Token | Value | Meaning |

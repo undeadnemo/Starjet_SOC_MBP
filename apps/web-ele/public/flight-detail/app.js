@@ -1,8 +1,8 @@
 const readiness = [
-  ['飞机 Aircraft', 100, '✓', 'ready'], ['机组 Crew', 100, '✓', 'ready'],
-  ['旅客 Passenger', 78, '!', 'warning'], ['地面保障 Handling', 100, '✓', 'ready'],
-  ['燃油 Fuel', 100, '✓', 'ready'], ['许可 Permit', 62, '✕', 'blocking'],
-  ['时刻 Slot', 100, '✓', 'ready'], ['文件 Documents', 75, '!', 'warning']
+  ['飞机', 100, '✓', 'ready'], ['机组', 100, '✓', 'ready'],
+  ['乘客', 78, '!', 'warning'], ['地面保障', 100, '✓', 'ready'],
+  ['燃油', 100, '✓', 'ready'], ['许可', 62, '✕', 'blocking'],
+  ['时刻', 100, '✓', 'ready'], ['文件', 75, '!', 'warning']
 ];
 
 const tripLegs = [
@@ -14,11 +14,11 @@ const tripLegs = [
     actualDep:{ lt:'06:08', utc:'22:08', beijing:'06:08' }, actualArr:{ lt:'10:31', utc:'01:31', beijing:'09:31' },
   },
   {
-    dep:'RJTT', depName:'东京羽田 · HND', depDate:'20 AUG', depIso:'2026-08-20', depLocal:'14:20', depUtc:'05:20', depBeijing:'13:20',
-    arr:'WSSS', arrName:'新加坡樟宜 · SIN', arrDate:'20 AUG', arrIso:'2026-08-20', arrLocal:'20:35', arrUtc:'12:35', arrBeijing:'20:35',
-    duration:'7H 15M', distance:'5,315 KM · IFR', taskType:'CHARTER', aircraft:'B-8263', movementState:'departed', movementUpdatedAt:'14:39:26',
-    estimatedDep:{ lt:'14:35', utc:'05:35', beijing:'13:35' }, estimatedArr:{ lt:'20:48', utc:'12:48', beijing:'20:48' },
-    actualDep:{ lt:'14:37', utc:'05:37', beijing:'13:37' }, actualArr:null,
+    dep:'ZSPD', depName:'东京羽田 · HND', depDate:'21 AUG', depIso:'2026-08-21', depLocal:'13:30', depUtc:'05:30', depBeijing:'13:30',
+    arr:'ZGGG', arrName:'新加坡樟宜 · SIN', arrDate:'21 AUG', arrIso:'2026-08-21', arrLocal:'16:20', arrUtc:'08:20', arrBeijing:'16:20',
+    duration:'7H 15M', distance:'5,315 KM · IFR', taskType:'PAX', aircraft:'B-9308', movementState:'planned', movementUpdatedAt:'10:32:18', heroStatus:'PLANNING', cardStatus:'准备中',
+    estimatedDep:{ lt:'13:30', utc:'05:30', beijing:'13:30' }, estimatedArr:{ lt:'16:20', utc:'08:20', beijing:'16:20' },
+    actualDep:null, actualArr:null,
   },
   {
     dep:'WSSS', depName:'新加坡樟宜 · SIN', depDate:'22 AUG', depIso:'2026-08-22', depLocal:'09:00', depUtc:'01:00', depBeijing:'09:00',
@@ -31,10 +31,17 @@ const tripLegs = [
 let activeLeg = 1;
 let timeBasis = 'lt';
 
+const acarsRawMessages = {
+  pos: { type: 'POS', title: '位置报告', receivedAt: '08:42Z', source: 'B-9308', status: '已接收', raw: `/B-9308\nPOS N2334.2 E11318.6\nTIME 0842Z\nALT FL410\nMACH M0.86\nHDG 312\nWIND 278/064KT\nNEXT ZGSZ\nETA 1040Z` },
+  eta: { type: 'ETA', title: '预计到达时间更新', receivedAt: '08:28Z', source: 'B-9308', status: '已接收', raw: `/B-9308\nETA REPORT\nDEST ZGSZ\nETA 1040Z\nEFOB 4860KG\nALTN ZGGG\nSTATUS NORMAL` },
+  wx: { type: 'WX', title: '目的地天气回传', receivedAt: '08:15Z', source: 'ACARS', status: '已接收', raw: `/ACARS\nATIS ZGSZ M\nTIME 0815Z\nWIND 180/06KT\nVIS 8KM\nCLOUD SCT020\nTEMP 29/24\nQNH 1008\nRWY 15` },
+  fuel: { type: 'FUEL', title: '燃油状态报告', receivedAt: '08:03Z', source: 'B-9308', status: '已接收', raw: `/B-9308\nFUEL REPORT\nUTC 0803Z\nFOB 12400KG\nUSED 5950KG\nEFOB DEST 4860KG\nREMAINING NOMINAL` },
+};
+
 const aircraftProfiles = {
   'B-8263': { model: 'G450', parkingAirport: 'ZSSS', parkingTime: '2026-08-22 19:51' },
   'B-602M': { model: 'Legacy 650', parkingAirport: 'ZGSZ', parkingTime: '2026-08-22 10:40' },
-  'B-9308': { model: 'G450', parkingAirport: 'ZSPD', parkingTime: '2026-08-21 16:20' },
+  'B-9308': { model: 'G650ER', parkingAirport: 'ZSPD', parkingTime: '2026-08-21 16:20' },
   'B-9811': { model: 'G650ER', parkingAirport: 'ZBAA', parkingTime: '2026-08-22 17:10' },
   'B-801Q': { model: 'G650ER', parkingAirport: 'ZUUU', parkingTime: '2026-08-20 12:00' },
 };
@@ -55,6 +62,12 @@ const detailParams = new URLSearchParams(window.location.search);
 const detailTheme = detailParams.get('theme') === 'light' ? 'light' : 'dark';
 document.documentElement.classList.toggle('light', detailTheme === 'light');
 document.documentElement.classList.toggle('dark', detailTheme === 'dark');
+const detailContent = document.querySelector('.workspace .content');
+['flight', 'compliance', 'fuel', 'messages', 'crew', 'passengers', 'services', 'documents', 'billing', 'postflight']
+  .forEach((id) => {
+    const panel = document.getElementById(id);
+    if (panel) detailContent?.append(panel);
+  });
 const billTemplateStorageKey = 'starjet-flight-bill-templates';
 const baseBillTemplates = [
   { code: 'PAX', label: '客运包机', types: [
@@ -158,19 +171,20 @@ function renderBilling(leg) {
   tabStatus.setAttribute('aria-label', counts.missing ? `${counts.missing} 项账单待上传` : '账单已齐');
   tabStatus.title = tabStatus.getAttribute('aria-label');
   const table = document.querySelector('#billingTable');
-  table.innerHTML = `<div class="billing-row billing-head"><span>账单类型</span><span>归属对象</span><span>账单状态</span><span>财务联动</span><span>最近更新</span></div>${records.map((item) => {
+  table.innerHTML = `<div class="billing-row billing-head"><span>账单类型</span><span>归属对象</span><span>账单状态</span><span>付款金额</span><span>财务联动</span><span>最近更新</span></div>${records.map((item) => {
     const stateLabel = item.state === 'paid' ? '已付款' : item.state === 'received' ? '已上传' : '待上传';
+    const paymentAmount = item.payment ? escapeHtml(item.payment.amount.replace(/^付款\s*/, '')) : '—';
     const financeLink = item.payment
-      ? `<a href="${paymentApplicationHref(item.payment.id)}" target="_top"><b>${escapeHtml(item.payment.id)}</b><small>${escapeHtml(item.payment.amount)}</small></a>`
+      ? `<a href="${paymentApplicationHref(item.payment.id)}" target="_top"><b>${escapeHtml(item.payment.id)}</b><small>${escapeHtml(item.payment.title)}</small></a>`
       : '<span class="billing-no-link">暂无付款申请</span>';
     const updatedAt = item.payment?.updatedAt || (item.state === 'received' ? '2026-08-27 09:18' : '—');
-    return `<div class="billing-row"><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(template.label)} · ${scopeLabel}预配置</small></span><span>${item.owner === 'trip' ? '行程' : '航班'}</span><span><em class="billing-state is-${item.state}"><i></i>${stateLabel}</em></span><span>${financeLink}</span><time>${updatedAt}</time></div>`;
+    return `<div class="billing-row"><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(template.label)} · ${scopeLabel}预配置</small></span><span>${item.owner === 'trip' ? '行程' : '航班'}</span><span><em class="billing-state is-${item.state}"><i></i>${stateLabel}</em></span><span class="billing-amount">${paymentAmount}</span><span>${financeLink}</span><time>${updatedAt}</time></div>`;
   }).join('')}`;
 }
 const movementStateMeta = {
-  planned: { label: '计划', code: 'PLAN', summary: '航班按计划准备，尚未起飞' },
-  departed: { label: '已起飞', code: 'AIR', summary: '航班已离港，持续更新预计到达时间' },
-  arrived: { label: '已到达', code: 'ARR', summary: '航班已到达，实际起降时间已记录' },
+  planned: { label: '计划', code: '计划', summary: '航班按计划准备，尚未起飞' },
+  departed: { label: '已起飞', code: '起飞', summary: '航班已离港，持续更新预计到达时间' },
+  arrived: { label: '已到达', code: '到达', summary: '航班已到达，实际起降时间已记录' },
 };
 const movementStateAliases = { plan: 'planned', planning: 'planned', airborne: 'departed', inair: 'departed', landed: 'arrived' };
 const timeLabel = value => value && value.length === 4 ? `${value.slice(0, 2)}:${value.slice(2)}` : value;
@@ -189,7 +203,7 @@ const todoStatusMeta = {
 
 const fallbackTodos = [
   { content: '机务窗口 已确认', status: 'completed' },
-  { content: '加油不适用', status: 'pending' },
+  { content: '加油不适用', status: 'completed' },
 ];
 
 const defaultAnnouncements = [
@@ -252,12 +266,7 @@ function parseDetailTodos() {
 let detailTodos = parseDetailTodos();
 
 function renderDetailTodos() {
-  const counts = { completed: 0, pending: 0, blocked: 0 };
-  detailTodos.forEach(todo => { counts[todo.status] += 1; });
   document.querySelector('#todoCount').textContent = detailTodos.length;
-  document.querySelector('#completedTodoCount').textContent = counts.completed;
-  document.querySelector('#pendingTodoCount').textContent = counts.pending;
-  document.querySelector('#blockedTodoCount').textContent = counts.blocked;
   const list = document.querySelector('#detailTodoList');
   if (!detailTodos.length) {
     list.innerHTML = '<p class="todo-empty">当前航班暂无待办事项</p>';
@@ -342,6 +351,8 @@ function renderAircraft(registration) {
   const profile = aircraftProfiles[registration] || aircraftProfiles['B-8263'];
   document.querySelector('#aircraftRegistration').textContent = registration;
   document.querySelector('#aircraftModel').textContent = profile.model;
+  document.querySelectorAll('.aircraft-registration-value').forEach((element) => { element.textContent = registration; });
+  document.querySelectorAll('.aircraft-model-value').forEach((element) => { element.textContent = profile.model; });
   document.querySelector('#aircraftParkingAirport').textContent = profile.parkingAirport;
   document.querySelector('#aircraftParkingTime').textContent = profile.parkingTime;
   document.querySelector('#aircraftDetailRegistration').textContent = registration;
@@ -370,10 +381,11 @@ function renderMovement(leg, depField, arrField, basisLabel) {
 
   const status = document.querySelector('#movementStatus');
   status.className = `movement-status is-${leg.movementState || 'planned'}`;
-  status.querySelector('span').textContent = meta.label;
+  status.querySelector('span').textContent = leg.heroStatus || meta.label;
   document.querySelector('#movementSummary').textContent = meta.summary;
   document.querySelector('#movementUpdatedAt').textContent = `最后同步 ${leg.movementUpdatedAt || '刚刚'}`;
-  document.querySelector('.plane-mark').textContent = meta.code;
+  const planeMark = document.querySelector('.plane-mark');
+  if (planeMark) planeMark.textContent = meta.code;
 
   setTime('#scheduledDeparture', leg[depField]);
   setTime('#scheduledArrival', leg[arrField]);
@@ -381,6 +393,62 @@ function renderMovement(leg, depField, arrField, basisLabel) {
   setTime('#estimatedArrival', value(leg.estimatedArr, leg[arrField]));
   setTime('#actualDeparture', value(leg.actualDep), !leg.actualDep);
   setTime('#actualArrival', value(leg.actualArr), !leg.actualArr);
+}
+
+function renderMissionReadiness() {
+  const canvas = document.querySelector('#missionReadinessCanvas');
+  if (!canvas) return;
+  const bounds = canvas.getBoundingClientRect();
+  const size = Math.max(180, Math.min(bounds.width || 260, bounds.height || 260));
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(size * ratio);
+  canvas.height = Math.round(size * ratio);
+  canvas.style.width = `${size}px`;
+  canvas.style.height = `${size}px`;
+  const context = canvas.getContext('2d');
+  context.scale(ratio, ratio);
+  context.clearRect(0, 0, size, size);
+  const tokens = getComputedStyle(document.documentElement);
+  const colors = {
+    ready: tokens.getPropertyValue('--sj-lime').trim() || '#a3e635',
+    warning: tokens.getPropertyValue('--sj-amber').trim() || '#f5b942',
+    blocked: tokens.getPropertyValue('--sj-red').trim() || '#ff665c',
+    empty: tokens.getPropertyValue('--sj-surface-3').trim() || '#151b26',
+    inner: tokens.getPropertyValue('--sj-border').trim() || '#252d3d',
+  };
+  const center = size / 2;
+  const radius = size * .405;
+  context.beginPath();
+  context.arc(center, center, size * .475, 0, Math.PI * 2);
+  context.lineWidth = 1;
+  context.strokeStyle = colors.inner;
+  context.stroke();
+  context.lineWidth = Math.max(13, size * .065);
+  context.lineCap = 'butt';
+  context.beginPath();
+  context.arc(center, center, radius, -Math.PI / 2, Math.PI * 1.5);
+  context.strokeStyle = colors.empty;
+  context.stroke();
+  context.beginPath();
+  context.arc(center, center, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * .82);
+  context.strokeStyle = colors.ready;
+  context.stroke();
+  context.beginPath();
+  context.arc(center, center, radius - size * .105, 0, Math.PI * 2);
+  context.lineWidth = 1;
+  context.strokeStyle = colors.inner;
+  context.stroke();
+}
+
+function updateMissionPhase(state) {
+  const phases = [...document.querySelectorAll('.flight-phase-list li')];
+  const activeIndex = state === 'arrived' ? phases.length - 1 : state === 'departed' ? 4 : 2;
+  phases.forEach((phase, index) => {
+    phase.classList.toggle('is-complete', index < activeIndex || state === 'arrived');
+    phase.classList.toggle('is-current', index === activeIndex && state !== 'arrived');
+    const stateLabel = phase.querySelector('em');
+    if (stateLabel) stateLabel.textContent = index < activeIndex || state === 'arrived' ? '完成' : index === activeIndex ? '当前' : '待执行';
+  });
 }
 
 function renderLeg(index) {
@@ -392,13 +460,16 @@ function renderLeg(index) {
   document.querySelector('#arrName').textContent = leg.arrName;
   document.querySelector('#flightDuration').textContent = leg.duration;
   document.querySelector('#flightDistance').textContent = leg.distance;
-  document.querySelector('.trip-type').textContent = leg.taskType;
-  document.querySelector('#flightTaskType').textContent = leg.taskType;
+  const taskTypeLabels = { CHARTER: '包机', FERRY: '调机', PAX: 'PAX', MX: '维修', AOG: '停场维修' };
+  document.querySelector('.trip-type').textContent = taskTypeLabels[leg.taskType] || leg.taskType;
+  document.querySelector('#flightTaskType').textContent = taskTypeLabels[leg.taskType] || leg.taskType;
   renderBilling(leg);
   document.querySelector('#timelineDepTime').textContent = leg.depLocal;
   document.querySelector('#timelineArrTime').textContent = leg.arrLocal;
-  document.querySelector('#serviceDepartureAirport').textContent = `${leg.dep} · ${leg.depName.split(' · ')[0]}`;
-  document.querySelector('#serviceArrivalAirport').textContent = `${leg.arr} · ${leg.arrName.split(' · ')[0]}`;
+  document.querySelector('#serviceDepartureAirport').textContent = leg.dep;
+  document.querySelector('#serviceDepartureName').textContent = leg.depName.split(' · ')[0];
+  document.querySelector('#serviceArrivalAirport').textContent = leg.arr;
+  document.querySelector('#serviceArrivalName').textContent = leg.arrName.split(' · ')[0];
   renderAircraft(leg.aircraft);
   const timeFields = {
     beijing: ['depBeijing', 'arrBeijing', 'BJ'],
@@ -406,15 +477,17 @@ function renderLeg(index) {
     utc: ['depUtc', 'arrUtc', 'UTC'],
   };
   const [depField, arrField, basisLabel] = timeFields[timeBasis];
-  document.querySelector('#depTime').innerHTML = `${leg.depDate}&nbsp; ${leg[depField]} <small>${basisLabel}</small>`;
-  document.querySelector('#arrTime').innerHTML = `${leg.arrDate}&nbsp; ${leg[arrField]} <small>${basisLabel}</small>`;
+  document.querySelector('#depTime').innerHTML = `<span>${leg.depDate} 2026</span><b>${leg[depField]} <small>${basisLabel}</small></b>`;
+  document.querySelector('#arrTime').innerHTML = `<span>${leg.arrDate} 2026</span><b>${leg[arrField]} <small>${basisLabel}</small></b>`;
+  document.querySelector('#countdownTime').textContent = `${leg.depDate} 2026 ${leg[depField]} ${basisLabel}`;
   renderMovement(leg, depField, arrField, basisLabel);
+  updateMissionPhase(leg.movementState);
   document.querySelector('#crumbLeg').textContent = `航班 ${index + 1}`;
   document.querySelector('#legNumber').textContent = index + 1;
   document.querySelectorAll('.leg-card').forEach((card, cardIndex) => {
     const cardLeg = tripLegs[cardIndex];
     const cardMovement = movementStateMeta[cardLeg.movementState] || movementStateMeta.planned;
-    card.querySelector('small').textContent = `航班 ${cardIndex + 1} · ${cardMovement.label}`;
+    card.querySelector('small').textContent = `航班 ${cardIndex + 1} · ${cardLeg.cardStatus || cardMovement.label}`;
     card.querySelector('b').textContent = `${cardLeg.dep} → ${cardLeg.arr}`;
     card.querySelector('span').textContent = `${cardLeg.depDate} · ${cardLeg.depLocal}–${cardLeg.arrLocal}`;
     card.classList.toggle('completed', cardLeg.movementState === 'arrived');
@@ -460,28 +533,50 @@ detailTodoList.addEventListener('click', event => {
 });
 
 const detailTodoInput = document.querySelector('#detailTodoInput');
+const detailTodoComposer = document.querySelector('#detailTodoComposer');
+const openTodoComposer = document.querySelector('#openTodoComposer');
+const setTodoComposerOpen = open => {
+  detailTodoComposer.hidden = !open;
+  openTodoComposer.setAttribute('aria-expanded', String(open));
+  openTodoComposer.textContent = open ? '收起' : '新增';
+  if (open) detailTodoInput.focus();
+};
 const addDetailTodo = () => {
   const content = detailTodoInput.value.trim();
   if (!content) return;
   detailTodos.push({ content, status: 'pending' });
   detailTodoInput.value = '';
   renderDetailTodos();
-  detailTodoInput.focus();
+  setTodoComposerOpen(false);
 };
 document.querySelector('#addDetailTodo').addEventListener('click', addDetailTodo);
+openTodoComposer?.addEventListener('click', () => {
+  setTodoComposerOpen(detailTodoComposer.hidden);
+});
 detailTodoInput.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    setTodoComposerOpen(false);
+    openTodoComposer.focus();
+    return;
+  }
   if (event.key !== 'Enter' || event.shiftKey) return;
   event.preventDefault();
   addDetailTodo();
 });
 
 const announcementForm = document.querySelector('#announcementForm');
-document.querySelector('#addAnnouncement').addEventListener('click', () => {
-  announcementForm.hidden = false;
-  document.querySelector('#announcementContent').focus();
+const addAnnouncementButton = document.querySelector('#addAnnouncement');
+const setAnnouncementFormOpen = open => {
+  announcementForm.hidden = !open;
+  addAnnouncementButton.setAttribute('aria-expanded', String(open));
+  addAnnouncementButton.textContent = open ? '收起' : '新增';
+  if (open) document.querySelector('#announcementContent').focus();
+};
+addAnnouncementButton.addEventListener('click', () => {
+  setAnnouncementFormOpen(announcementForm.hidden);
 });
 document.querySelector('#cancelAnnouncement').addEventListener('click', () => {
-  announcementForm.hidden = true;
+  setAnnouncementFormOpen(false);
   announcementForm.reset();
   document.querySelector('#announcementAuthor').value = '张园';
 });
@@ -493,7 +588,7 @@ announcementForm.addEventListener('submit', event => {
   announcements.unshift({ author, content, createdAt: formatAnnouncementTime(new Date()) });
   localStorage.setItem(announcementKey, JSON.stringify(announcements));
   renderAnnouncements();
-  announcementForm.hidden = true;
+  setAnnouncementFormOpen(false);
   announcementForm.reset();
   document.querySelector('#announcementAuthor').value = author;
   showToast('航班公告已发布');
@@ -521,6 +616,59 @@ function switchTab(id) {
 
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)));
 document.querySelectorAll('[data-jump]').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.jump)));
+document.querySelector('#missionPrimaryAction')?.addEventListener('click', () => {
+  switchTab('compliance');
+  showToast('已定位至许可与时刻核验');
+});
+
+const passengerDocumentTable = document.querySelector('.passenger-document-table');
+const passengerDocumentOrderKey = 'starjet-flight-detail-passenger-document-order';
+const getPassengerRowKey = row => row.querySelector('.passenger-primary')?.textContent.trim();
+
+function restorePassengerDocumentOrder() {
+  const savedOrder = JSON.parse(localStorage.getItem(passengerDocumentOrderKey) || '[]');
+  if (!Array.isArray(savedOrder) || !savedOrder.length) return;
+  const rowsByKey = new Map([...passengerDocumentTable.querySelectorAll('[data-passenger-row]')].map(row => [getPassengerRowKey(row), row]));
+  savedOrder.forEach(key => {
+    const row = rowsByKey.get(key);
+    if (row) passengerDocumentTable.append(row);
+  });
+}
+
+function savePassengerDocumentOrder() {
+  const order = [...passengerDocumentTable.querySelectorAll('[data-passenger-row]')].map(getPassengerRowKey);
+  localStorage.setItem(passengerDocumentOrderKey, JSON.stringify(order));
+}
+
+function updatePassengerDocumentOrder() {
+  const rows = [...passengerDocumentTable.querySelectorAll('[data-passenger-row]')];
+  rows.forEach((row, index) => {
+    row.querySelector('[data-passenger-sequence]').textContent = String(index + 1).padStart(2, '0');
+    row.querySelector('[data-passenger-order]').textContent = String(index + 1);
+    row.querySelector('[data-passenger-move="up"]').disabled = index === 0;
+    row.querySelector('[data-passenger-move="down"]').disabled = index === rows.length - 1;
+  });
+}
+
+passengerDocumentTable?.addEventListener('click', event => {
+  const button = event.target.closest('[data-passenger-move]');
+  if (!button || button.disabled) return;
+  const row = button.closest('[data-passenger-row]');
+  if (button.dataset.passengerMove === 'up') {
+    const previousRow = row.previousElementSibling;
+    if (previousRow?.hasAttribute('data-passenger-row')) passengerDocumentTable.insertBefore(row, previousRow);
+  } else {
+    const nextRow = row.nextElementSibling;
+    if (nextRow?.hasAttribute('data-passenger-row')) passengerDocumentTable.insertBefore(nextRow, row);
+  }
+  updatePassengerDocumentOrder();
+  savePassengerDocumentOrder();
+  button.focus();
+  showToast('乘客证件排序已更新');
+});
+
+restorePassengerDocumentOrder();
+updatePassengerDocumentOrder();
 
 const sectionObserver = new IntersectionObserver(entries => {
   if (navigationTarget) return;
@@ -531,7 +679,7 @@ const sectionObserver = new IntersectionObserver(entries => {
   setActiveTab(visibleSection.target.id);
 }, { rootMargin: '-74px 0px -58% 0px', threshold: [0.05, 0.2, 0.5] });
 
-document.querySelectorAll('.tab-panel:not(.retired-overview)').forEach(panel => sectionObserver.observe(panel));
+document.querySelectorAll('#dashboard, .tab-panel:not(.retired-overview)').forEach(panel => sectionObserver.observe(panel));
 
 const resumeScrollTracking = () => { navigationTarget = ''; };
 window.addEventListener('wheel', resumeScrollTracking, { passive: true });
@@ -554,6 +702,8 @@ timeToggle.addEventListener('click', event => {
 });
 
 renderLeg(activeLeg);
+window.requestAnimationFrame(renderMissionReadiness);
+window.addEventListener('resize', renderMissionReadiness, { passive: true });
 
 const changeRecordList = document.querySelector('#changeRecordList');
 const selectChangeRecord = (record, notify = false) => {
@@ -561,13 +711,15 @@ const selectChangeRecord = (record, notify = false) => {
   document.querySelectorAll('[data-change-record]').forEach(item => {
     const active = item === record;
     item.classList.toggle('active', active);
-    item.setAttribute('aria-pressed', String(active));
-    item.querySelector('em').textContent = active ? '生效' : '设为生效';
+    const action = item.querySelector('[data-change-record-action]');
+    action.setAttribute('aria-pressed', String(active));
+    action.textContent = active ? '生效' : '设为生效';
   });
   if (notify) showToast('已更新当前生效的航班变更记录');
 };
 changeRecordList?.addEventListener('click', event => {
-  selectChangeRecord(event.target.closest('[data-change-record]'), true);
+  const action = event.target.closest('[data-change-record-action]');
+  if (action) selectChangeRecord(action.closest('[data-change-record]'), true);
 });
 const newestChangeRecord = [...(changeRecordList?.querySelectorAll('[data-change-record]') || [])]
   .sort((a, b) => new Date(b.dataset.recordTime) - new Date(a.dataset.recordTime))[0];
@@ -578,9 +730,14 @@ document.querySelector('#passengerDocumentUpload')?.addEventListener('change', e
   if (!file) return;
   const status = document.querySelector('#passengerOcrStatus');
   status.hidden = false;
-  status.innerHTML = `<b>${escapeHtml(file.name)}</b><span>模拟 OCR 识别完成，请复核姓名、证件号、签发国和有效期。</span>`;
+  status.innerHTML = `<b>${escapeHtml(file.name)}</b><span>模拟 OCR 识别完成，请复核中英文名、性别、出生日期、国籍、证件号码和失效日期。</span>`;
   showToast('证件已上传，模拟 OCR 识别完成');
 });
+
+const passengerDocumentComparison = document.querySelector('#passengerDocumentComparison');
+if (passengerDocumentComparison) {
+  passengerDocumentComparison.hidden = !passengerDocumentComparison.querySelector('.passenger-comparison-row:not(.passenger-comparison-head)');
+}
 
 const fuelInputs = ['#fuelBeforeDeparture', '#fuelAfterDeparture', '#fuelBeforeRefuel', '#fuelUplift']
   .map(selector => document.querySelector(selector));
@@ -614,9 +771,6 @@ const applyPermitStatusColor = select => {
 const updatePermitSummary = () => {
   const selects = [...permitTable.querySelectorAll('.permit-status')];
   selects.forEach(applyPermitStatusColor);
-  const statuses = selects.map(select => select.value);
-  const available = statuses.filter(status => status === '已批准' || status === '不适用').length;
-  document.querySelector('#permitSummary').textContent = `${available}/${statuses.length} 可用`;
 };
 permitTable?.addEventListener('change', event => {
   if (event.target.matches('.permit-status')) {
@@ -626,16 +780,37 @@ permitTable?.addEventListener('change', event => {
   if (event.target.matches('.permit-type')) showToast('许可类型已更新');
 });
 permitTable?.addEventListener('click', event => {
+  const confirmButton = event.target.closest('.permit-confirm');
+  if (confirmButton) {
+    const row = confirmButton.closest('.permit-row');
+    const editableCells = [...row.querySelectorAll('[contenteditable="true"]')];
+    const [descriptionCell] = editableCells;
+    if (!descriptionCell.textContent.trim()) {
+      descriptionCell.focus();
+      showToast('请填写许可描述');
+      return;
+    }
+    editableCells.forEach(cell => {
+      if (!cell.textContent.trim()) cell.textContent = '—';
+      cell.removeAttribute('contenteditable');
+      cell.removeAttribute('data-placeholder');
+    });
+    row.classList.remove('is-editing');
+    confirmButton.remove();
+    updatePermitSummary();
+    showToast('航前资源记录已确认');
+    return;
+  }
   const deleteButton = event.target.closest('.permit-delete');
   if (!deleteButton) return;
   deleteButton.closest('.permit-row')?.remove();
   updatePermitSummary();
-  showToast('许可或时刻记录已删除');
+  showToast('航前资源记录已删除');
 });
 document.querySelector('#addPermit')?.addEventListener('click', () => {
   const row = document.createElement('div');
-  row.className = 'permit-row';
-  row.innerHTML = '<select class="permit-type" aria-label="新许可类型"><option selected>Permit</option><option>Slot</option><option>PPR</option><option>Parking</option></select><span contenteditable="true">新许可</span><span contenteditable="true">待填写</span><span contenteditable="true">待填写</span><select class="permit-status" aria-label="新许可状态"><option selected>待申请</option><option>处理中</option><option>已批准</option><option>不适用</option></select><button class="permit-delete" type="button" aria-label="删除新许可">删除</button>';
+  row.className = 'permit-row is-editing';
+  row.innerHTML = '<select class="permit-type" aria-label="新许可类型"><option selected>Permit</option><option>Slot</option><option>PPR</option><option>Parking</option></select><span contenteditable="true" data-placeholder="填写许可描述"></span><select class="permit-status" aria-label="新许可状态"><option selected>待申请</option><option>处理中</option><option>已批准</option><option>不适用</option></select><div class="permit-actions"><button class="permit-confirm" type="button">确认</button><button class="permit-delete" type="button" aria-label="删除新许可">删除</button></div>';
   permitTable.append(row);
   updatePermitSummary();
   row.querySelector('[contenteditable]')?.focus();
@@ -742,12 +917,25 @@ document.querySelectorAll('#editDeparture, #editArrival').forEach(input => input
   showFlightEditError();
 }));
 const exportMaterials = {
-  'crew-trip-sheet': '机组行程清单',
-  'passenger-itinerary': '乘客行程清单',
-  'ciq-package': '三关文件',
+  'flight-leg': '航段提取',
   'flight-assignment': '飞行任务书',
-  'dispatch-package': '航班放行资料包',
-  'handling-sheet': '保障任务单',
+  'crew-information': '行程清单 - 机组 / 机组信息',
+  'crew-airport-service': '行程清单 - 机组 / 机场服务',
+  'crew-service-notice': '行程清单 - 机组 / 服务提示',
+  'crew-permit-notice': '行程清单 - 机组 / 许可提示',
+  'crew-passenger-information': '行程清单 - 机组 / 乘客信息',
+  'crew-documents': '行程清单 - 机组 / 证件',
+  'customer-crew-information': '行程清单 - 客户 / 机组信息',
+  'customer-airport-service': '行程清单 - 客户 / 机场服务',
+  'customer-passenger-information': '行程清单 - 客户 / 乘客信息',
+  'general-declaration': '三关文件 / 总申报单（通用）',
+  'domestic-general-declaration': '三关文件 / 总申报单（国内）',
+  api: '三关文件 / API',
+  'customs-crew-declaration': '三关文件 / 海关机组申报单',
+  'employee-register': '三关文件 / 员工登记表',
+  'passenger-register': '三关文件 / 旅客登记表',
+  'security-check-form': '三关文件 / 安检单',
+  'carried-items-list': '三关文件 / 携带物品清单',
 };
 
 function showToast(message) {
@@ -757,48 +945,800 @@ function showToast(message) {
   setTimeout(() => toast.classList.remove('show'), 1800);
 }
 
-function exportMaterial(key) {
-  const title = exportMaterials[key];
-  if (!title) return;
-  const activeFlight = tripLegs[activeLeg];
-  const content = [
-    title,
-    `航段：${activeFlight.dep} - ${activeFlight.arr}`,
-    `日期：${activeFlight.depDate}`,
-    `时间：${activeFlight.depLocal} - ${activeFlight.arrLocal}`,
-    'Starjet SOC 航班运行中心生成',
-  ].join('\n');
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${title}-${activeFlight.dep}-${activeFlight.arr}.txt`;
-  document.body.append(link);
-  link.click();
-  setTimeout(() => {
-    link.remove();
-    URL.revokeObjectURL(url);
-  }, 1000);
-  showToast(`${title}已生成并开始下载`);
+const acarsRawDialog = document.querySelector('#acarsRawDialog');
+const acarsRawContent = document.querySelector('#acarsRawContent');
+
+function closeAcarsRawDialog() {
+  acarsRawDialog?.close();
 }
 
-document.querySelectorAll('[data-export]').forEach(button => {
-  button.addEventListener('click', () => exportMaterial(button.dataset.export));
+function openAcarsRawDialog(messageKey) {
+  const message = acarsRawMessages[messageKey];
+  if (!message || !acarsRawDialog) return;
+  document.querySelector('#acarsRawType').textContent = `ACARS · ${message.type}`;
+  document.querySelector('#acarsRawTitle').textContent = message.title;
+  document.querySelector('#acarsRawReceivedAt').textContent = message.receivedAt;
+  document.querySelector('#acarsRawSource').textContent = message.source;
+  document.querySelector('#acarsRawStatus').textContent = message.status;
+  acarsRawContent.textContent = message.raw;
+  acarsRawDialog.showModal();
+  acarsRawContent.focus();
+}
+
+document.querySelector('.acars-panel')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-acars-raw]');
+  if (button) openAcarsRawDialog(button.dataset.acarsRaw);
+});
+document.querySelector('#closeAcarsRaw')?.addEventListener('click', closeAcarsRawDialog);
+document.querySelector('#closeAcarsRawFooter')?.addEventListener('click', closeAcarsRawDialog);
+acarsRawDialog?.addEventListener('click', event => {
+  if (event.target === acarsRawDialog) closeAcarsRawDialog();
+});
+document.querySelector('#copyAcarsRaw')?.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(acarsRawContent.textContent);
+    showToast('原始报文已复制');
+  } catch {
+    showToast('复制失败，请手动选择报文内容');
+  }
 });
 
-document.querySelectorAll('[data-preview]').forEach(button => {
-  button.addEventListener('click', () => {
-    const title = exportMaterials[button.dataset.preview];
-    if (title) showToast(`正在预览：${title}`);
+const exportItemInputs = [...document.querySelectorAll('[data-export-item]')];
+const selectedExportCount = document.querySelector('#selectedExportCount');
+const exportSelectedButton = document.querySelector('[data-export-selected]');
+const previewSelectedButton = document.querySelector('[data-preview-selected]');
+const exportPreviewDialog = document.querySelector('#exportPreviewDialog');
+const exportPreviewFileList = document.querySelector('#exportPreviewFileList');
+const exportPreviewDocument = document.querySelector('#exportPreviewDocument');
+const exportPreviewPdf = document.querySelector('#exportPreviewPdf');
+const exportPreviewCurrent = document.querySelector('#exportPreviewCurrent');
+let activeExportPreviewKey = '';
+
+const exportSampleFiles = {
+  'flight-assignment': { name: '飞行任务书.pdf', path: 'sample-files/flight-assignment.pdf' },
+  'crew-information': { name: '机组行程单.pdf', path: 'sample-files/crew-trip-sheet.pdf' },
+  'crew-airport-service': { name: '机组行程单.pdf', path: 'sample-files/crew-trip-sheet.pdf' },
+  'crew-service-notice': { name: '机组行程单.pdf', path: 'sample-files/crew-trip-sheet.pdf' },
+  'crew-permit-notice': { name: '机组行程单.pdf', path: 'sample-files/crew-trip-sheet.pdf' },
+  'crew-passenger-information': { name: '机组行程单.pdf', path: 'sample-files/crew-trip-sheet.pdf' },
+  'crew-documents': { name: '机组行程单.pdf', path: 'sample-files/crew-trip-sheet.pdf' },
+  'customer-crew-information': { name: '客户行程单.pdf', path: 'sample-files/customer-trip-sheet.pdf' },
+  'customer-airport-service': { name: '客户行程单.pdf', path: 'sample-files/customer-trip-sheet.pdf' },
+  'customer-passenger-information': { name: '客户行程单.pdf', path: 'sample-files/customer-trip-sheet.pdf' },
+  'general-declaration': { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+  'domestic-general-declaration': { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+  api: { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+  'customs-crew-declaration': { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+  'employee-register': { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+  'passenger-register': { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+  'security-check-form': { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+  'carried-items-list': { name: '三关文件.pdf', path: 'sample-files/ciq-documents.pdf' },
+};
+
+const exportPreviewSections = {
+  'flight-leg': ['航段与航班基础信息', '计划起降时间', '机场与备降机场信息', '任务类型与飞行规则'],
+  'flight-assignment': ['飞行任务信息', '飞机与机组配置', '计划航路与时刻', '签派与放行信息'],
+  'crew-information': ['机组成员与岗位', '排班状态', '联系方式与执照状态'],
+  'crew-airport-service': ['起飞站机场服务', '到达站机场服务', '地面代理联系方式'],
+  'crew-service-notice': ['保障注意事项', '地面服务提示', '异常处置说明'],
+  'crew-permit-notice': ['许可状态', '时刻状态', '待处理许可提醒'],
+  'crew-passenger-information': ['乘客名单', '特殊服务需求', '登机确认状态'],
+  'crew-documents': ['机组证件', '乘客证件', '证件有效期提示'],
+  'customer-crew-information': ['当班机组姓名与岗位', '机组服务联系方式'],
+  'customer-airport-service': ['起降机场信息', '接送机地点', '机场服务安排'],
+  'customer-passenger-information': ['乘客名单', '行程时间', '特殊服务说明'],
+  'general-declaration': ['航班与飞机信息', '机组名单', '旅客名单', '申报签章'],
+  'domestic-general-declaration': ['国内航段信息', '机组与旅客信息', '申报签章'],
+  api: ['旅客身份信息', '旅行证件信息', '航班行程信息'],
+  'customs-crew-declaration': ['机组人员信息', '携带物品申报', '海关签章'],
+  'employee-register': ['员工基本信息', '岗位与证件信息', '出入境记录'],
+  'passenger-register': ['旅客基本信息', '证件与国籍信息', '行程记录'],
+  'security-check-form': ['安检人员信息', '检查项目', '检查结果与签章'],
+  'carried-items-list': ['携带物品明细', '数量与用途', '申报状态'],
+};
+
+function selectedExportItems() {
+  return exportItemInputs.filter(input => input.checked).map(input => input.value);
+}
+
+function updateExportSelection() {
+  const selected = selectedExportItems();
+  selectedExportCount.textContent = selected.length;
+  const format = document.querySelector('input[name="exportFormat"]:checked')?.value || 'pdf';
+  exportSelectedButton.textContent = `导出 ${format === 'excel' ? 'Excel' : 'PDF'} · ${selected.length} 项`;
+  exportSelectedButton.disabled = !selected.length;
+  previewSelectedButton.disabled = !selected.length;
+  document.querySelectorAll('[data-export-group]').forEach(groupInput => {
+    const children = exportItemInputs.filter(input => input.dataset.group === groupInput.dataset.exportGroup);
+    const selectedChildren = children.filter(input => input.checked).length;
+    groupInput.checked = selectedChildren === children.length;
+    groupInput.indeterminate = selectedChildren > 0 && selectedChildren < children.length;
+    const count = groupInput.closest('.export-group-head')?.querySelector('[data-export-group-count]');
+    if (count) count.textContent = `${selectedChildren} / ${children.length}`;
   });
+}
+
+function renderExportPreview(key) {
+  const activeFlight = tripLegs[activeLeg];
+  const sampleFile = exportSampleFiles[key];
+  activeExportPreviewKey = key;
+  exportPreviewDocument.hidden = Boolean(sampleFile);
+  exportPreviewPdf.hidden = !sampleFile;
+  exportPreviewCurrent.textContent = sampleFile ? '下载当前文件' : '导出当前文件';
+  if (sampleFile) {
+    exportPreviewPdf.src = `${sampleFile.path}#view=FitH&toolbar=1&navpanes=1`;
+    document.querySelector('#exportPreviewTitle').textContent = sampleFile.name;
+  } else {
+    exportPreviewPdf.removeAttribute('src');
+    document.querySelector('#exportPreviewTitle').textContent = '文件预览';
+  }
+  document.querySelector('#exportPreviewDocumentCode').textContent = key.toUpperCase().replaceAll('-', ' ');
+  document.querySelector('#exportPreviewDocumentTitle').textContent = exportMaterials[key] || key;
+  document.querySelector('#exportPreviewDocumentRoute').textContent = `${activeFlight.dep} → ${activeFlight.arr} · ${activeFlight.depLocal}–${activeFlight.arrLocal} LT`;
+  document.querySelector('#exportPreviewDocumentDate').textContent = activeFlight.depDate;
+  document.querySelector('#exportPreviewDocumentSections').innerHTML = (exportPreviewSections[key] || ['航班运行信息']).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+  document.querySelector('#exportPreviewGeneratedAt').textContent = `预览生成于 ${new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short', hour12: false }).format(new Date())}`;
+  exportPreviewFileList.querySelectorAll('button').forEach(button => {
+    const active = button.dataset.previewExportFile === key;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-current', active ? 'true' : 'false');
+  });
+}
+
+function openExportPreview() {
+  const selected = selectedExportItems();
+  if (!selected.length) return;
+  document.querySelector('#exportPreviewCount').textContent = selected.length;
+  exportPreviewFileList.innerHTML = selected.map((key, index) => `<button type="button" data-preview-export-file="${escapeHtml(key)}"><span>${String(index + 1).padStart(2, '0')}</span><b>${escapeHtml(exportMaterials[key])}</b></button>`).join('');
+  renderExportPreview(selected[0]);
+  exportPreviewDialog.showModal();
+}
+
+exportItemInputs.forEach(input => input.addEventListener('change', updateExportSelection));
+document.querySelectorAll('[data-export-group]').forEach(groupInput => groupInput.addEventListener('change', () => {
+  exportItemInputs.filter(input => input.dataset.group === groupInput.dataset.exportGroup).forEach(input => {
+    input.checked = groupInput.checked;
+  });
+  updateExportSelection();
+}));
+document.querySelectorAll('[data-export-toggle]').forEach(button => button.addEventListener('click', () => {
+  const items = document.querySelector(`[data-export-group-items="${button.dataset.exportToggle}"]`);
+  const expanded = button.getAttribute('aria-expanded') === 'true';
+  button.setAttribute('aria-expanded', String(!expanded));
+  button.textContent = expanded ? '展开' : '收起';
+  items.hidden = expanded;
+}));
+document.querySelector('[data-export-select-all]')?.addEventListener('click', () => {
+  exportItemInputs.forEach(input => { input.checked = true; });
+  updateExportSelection();
+});
+document.querySelector('[data-export-clear]')?.addEventListener('click', () => {
+  exportItemInputs.forEach(input => { input.checked = false; });
+  updateExportSelection();
+});
+document.querySelectorAll('input[name="exportFormat"]').forEach(input => input.addEventListener('change', updateExportSelection));
+previewSelectedButton?.addEventListener('click', openExportPreview);
+exportPreviewFileList?.addEventListener('click', event => {
+  const button = event.target.closest('[data-preview-export-file]');
+  if (button) renderExportPreview(button.dataset.previewExportFile);
+});
+function closeExportPreview() {
+  exportPreviewDialog.close();
+  exportPreviewPdf.removeAttribute('src');
+}
+document.querySelector('#closeExportPreview')?.addEventListener('click', closeExportPreview);
+document.querySelector('#closeExportPreviewFooter')?.addEventListener('click', closeExportPreview);
+exportPreviewDialog?.addEventListener('click', event => {
+  if (event.target === exportPreviewDialog) closeExportPreview();
+});
+exportPreviewCurrent?.addEventListener('click', () => {
+  const sampleFile = exportSampleFiles[activeExportPreviewKey];
+  if (sampleFile) {
+    const link = document.createElement('a');
+    link.href = sampleFile.path;
+    link.download = sampleFile.name;
+    link.click();
+    showToast(`${sampleFile.name}开始下载`);
+    return;
+  }
+  const format = document.querySelector('input[name="exportFormat"]:checked')?.value === 'excel' ? 'Excel' : 'PDF';
+  showToast(`${exportMaterials[activeExportPreviewKey]}已加入 ${format} 导出队列`);
+});
+exportSelectedButton?.addEventListener('click', () => {
+  const selected = selectedExportItems();
+  const format = document.querySelector('input[name="exportFormat"]:checked')?.value === 'excel' ? 'Excel' : 'PDF';
+  showToast(`${selected.length} 项物料已加入 ${format} 导出队列`);
+});
+updateExportSelection();
+
+const melAttachmentDialog = document.querySelector('#melAttachmentDialog');
+document.querySelectorAll('[data-mel-attachment]').forEach((button) => button.addEventListener('click', () => {
+  document.querySelector('#melAttachmentFile').textContent = `附件预览 · ${button.dataset.file}`;
+  document.querySelector('#melAttachmentControlNo').textContent = `CTL No. ${button.dataset.controlNo}`;
+  document.querySelector('#melAttachmentIssueDate').textContent = button.dataset.issueDate;
+  document.querySelector('#melAttachmentDueDate').textContent = button.dataset.dueDate;
+  melAttachmentDialog?.showModal();
+}));
+document.querySelector('#closeMelAttachment')?.addEventListener('click', () => melAttachmentDialog?.close());
+melAttachmentDialog?.addEventListener('click', (event) => {
+  if (event.target === melAttachmentDialog) melAttachmentDialog.close();
+});
+document.querySelector('#downloadMelAttachment')?.addEventListener('click', () => showToast('保留故障单附件已加入下载队列'));
+
+const melPrintButton = document.querySelector('#printMelRecord');
+const finishMelPrint = () => document.body.classList.remove('printing-mel');
+melPrintButton?.addEventListener('click', () => {
+  const now = new Date();
+  document.querySelector('#melPrintedAt').textContent = new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'medium', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(now);
+  document.body.classList.add('printing-mel');
+  window.setTimeout(() => window.print(), 80);
+});
+window.addEventListener('afterprint', finishMelPrint);
+
+const postflightLogDialog = document.querySelector('#postflightLogDialog');
+const postflightLogForm = document.querySelector('#postflightLogForm');
+const postflightLogList = document.querySelector('#postflightLogList');
+const postflightServiceProject = document.querySelector('#postflightServiceProject');
+const postflightServiceCombobox = document.querySelector('#postflightServiceCombobox');
+const postflightServiceProjectList = document.querySelector('#postflightServiceProjectList');
+const postflightLogDescription = document.querySelector('#postflightLogDescription');
+const postflightLogCharCount = document.querySelector('#postflightLogCharCount');
+const postflightPendingAttachments = document.querySelector('#postflightPendingAttachments');
+const postflightDraftKey = `starjet-postflight-logs:${detailParams.get('flightId') || 'default'}`;
+const serviceEvaluationOptions = [
+  ['local-handlers', '当地代理服务', 'Local Handlers Service'],
+  ['crew-transport', '场外机组交通服务', 'Outside Transportation Service for Crew'],
+  ['vip-vehicle', '场外车辆出入服务', 'Vehicles Entering the VIP Area'],
+  ['vip-pax-crew', '乘客及机组贵宾服务', 'VIP Service for PAX and Crew'],
+  ['vip-lounge', '贵宾室服务', 'VIP Lounge Service'],
+  ['security-check', '安检通道及安检服务', 'Security Check Service'],
+  ['ramp-transport', '场内摆渡服务', 'Ramp Transportation Service'],
+  ['tow-vehicle', '拖车服务', 'Tow Vehicle Service'],
+  ['aircraft-ramp', '一般勤务服务', 'Aircraft Ramp Service'],
+  ['customs', '海关服务', 'Customs Services'],
+  ['immigration', '边检服务', 'Immigration Services'],
+  ['fuel', '航油服务', 'Fuel Services'],
+  ['apron', '停机位安排', 'Apron Arrangement'],
+  ['catering', '航食服务', 'Catering Service'],
+  ['crew-hotel', '机组酒店安排', 'Crew Hotel Arrangement'],
+  ['other', '其它服务', 'Other Service'],
+];
+const serviceRatingMeta = {
+  good: { label: '好评', className: 'is-good' },
+  neutral: { label: '中评', className: 'is-neutral' },
+  bad: { label: '差评', className: 'is-bad' },
+};
+let postflightLogs = [];
+let pendingPostflightAttachments = [];
+let editingPostflightLogId = null;
+let activePostflightServiceOption = -1;
+
+try {
+  const savedDraft = JSON.parse(localStorage.getItem(postflightDraftKey) || 'null');
+  const savedLogs = savedDraft?.logs || savedDraft?.evaluations || [];
+  postflightLogs = savedLogs.filter(item => item.code && item.rating).map((item, index) => ({
+    id: item.id || `${Date.now()}-${index}`,
+    code: item.code,
+    rating: item.rating,
+    description: item.description || savedDraft?.description || '',
+    attachments: Array.isArray(item.attachments) ? item.attachments : [],
+    creator: item.creator || '张园',
+    createdAt: item.createdAt || new Date().toISOString(),
+  }));
+} catch { /* Ignore malformed local drafts. */ }
+
+function serviceOption(code) {
+  return serviceEvaluationOptions.find(item => item[0] === code) || [code, code, ''];
+}
+
+function matchingServiceOptions(query = '') {
+  const keyword = query.trim().toLocaleLowerCase();
+  if (!keyword) return serviceEvaluationOptions;
+  return serviceEvaluationOptions.filter(([code, label, english]) => `${code} ${label} ${english}`.toLocaleLowerCase().includes(keyword));
+}
+
+function exactServiceOption(value) {
+  const keyword = value.trim().toLocaleLowerCase();
+  return serviceEvaluationOptions.find(([code, label, english]) => [code, label, english].some(item => item.toLocaleLowerCase() === keyword));
+}
+
+function setActivePostflightServiceOption(index) {
+  const options = [...postflightServiceProjectList.querySelectorAll('[role="option"]')];
+  if (!options.length) {
+    activePostflightServiceOption = -1;
+    return;
+  }
+  activePostflightServiceOption = Math.max(0, Math.min(index, options.length - 1));
+  options.forEach((option, optionIndex) => {
+    option.classList.toggle('is-active', optionIndex === activePostflightServiceOption);
+    option.setAttribute('aria-selected', optionIndex === activePostflightServiceOption ? 'true' : 'false');
+  });
+  options[activePostflightServiceOption].scrollIntoView({ block: 'nearest' });
+}
+
+function renderPostflightServiceOptions(query = '') {
+  const options = matchingServiceOptions(query);
+  activePostflightServiceOption = -1;
+  postflightServiceProjectList.innerHTML = options.length
+    ? options.map(([code, label, english]) => `<button type="button" role="option" aria-selected="false" data-service-code="${escapeHtml(code)}"><b>${escapeHtml(label)}</b><small>${escapeHtml(english)}</small></button>`).join('')
+    : '<span class="postflight-service-no-result">未找到匹配的服务项目</span>';
+  postflightServiceProjectList.hidden = false;
+  postflightServiceProject.setAttribute('aria-expanded', 'true');
+}
+
+function closePostflightServiceOptions() {
+  postflightServiceProjectList.hidden = true;
+  postflightServiceProject.setAttribute('aria-expanded', 'false');
+  activePostflightServiceOption = -1;
+}
+
+function selectPostflightServiceOption(code) {
+  const [, label] = serviceOption(code);
+  postflightServiceProject.value = label;
+  postflightServiceProject.dataset.code = code;
+  postflightServiceProject.setCustomValidity('');
+  closePostflightServiceOptions();
+}
+
+function formatEvaluationTime(value) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(value)).replaceAll('/', '-');
+}
+
+function renderPostflightLogs() {
+  if (!postflightLogList) return;
+  postflightLogList.innerHTML = postflightLogs.length ? postflightLogs.map(item => {
+    const [, label, english] = serviceOption(item.code);
+    const rating = serviceRatingMeta[item.rating] || serviceRatingMeta.neutral;
+    const attachmentMarkup = item.attachments.length
+      ? `<span class="postflight-log-files">${item.attachments.map(attachment => `<span class="postflight-log-file"><b>${escapeHtml(attachmentType(attachment.name))}</b><span>${escapeHtml(attachment.name)}</span><small>${escapeHtml(attachment.size || '')}</small></span>`).join('')}</span>`
+      : '<span class="postflight-log-no-data">—</span>';
+    return `<article class="postflight-log-row" role="row" data-postflight-log-id="${escapeHtml(item.id)}"><span class="postflight-log-service" role="cell"><b>${escapeHtml(label)}</b><small>${escapeHtml(english)}</small></span><span class="postflight-log-rating" role="cell"><em class="${rating.className}">${rating.label}</em></span><span class="postflight-log-description${item.description ? '' : ' is-empty'}" role="cell">${item.description ? escapeHtml(item.description) : '未填写'}</span><span class="postflight-log-attachment-cell" role="cell">${attachmentMarkup}</span><span role="cell">${escapeHtml(item.creator)}</span><time role="cell">${escapeHtml(formatEvaluationTime(item.createdAt))}</time><span class="postflight-log-row-actions" role="cell"><button type="button" data-edit-postflight-log="${escapeHtml(item.id)}">编辑</button><button class="is-danger" type="button" data-delete-postflight-log="${escapeHtml(item.id)}">删除</button></span></article>`;
+  }).join('') : '<div class="postflight-log-empty"><b>暂无航后日志</b><span>点击“新增”填写服务评价和航班执行记录</span></div>';
+  const tabStatus = document.querySelector('#postflightTabStatus');
+  if (tabStatus) {
+    tabStatus.className = `tab-module-status ${postflightLogs.length ? 'ready' : 'warning'}`;
+    tabStatus.setAttribute('aria-label', postflightLogs.length ? `${postflightLogs.length} 条航后日志` : '航后日志待填写');
+    tabStatus.title = postflightLogs.length ? `${postflightLogs.length} 条航后日志` : '航后日志待填写';
+    tabStatus.querySelector('span').textContent = postflightLogs.length ? `${postflightLogs.length}条` : '待填写';
+  }
+}
+
+function savePostflightLogs() {
+  localStorage.setItem(postflightDraftKey, JSON.stringify({ logs: postflightLogs }));
+}
+
+function formatAttachmentSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function attachmentType(fileName) {
+  const extension = fileName.split('.').pop()?.slice(0, 4).toUpperCase();
+  return extension || 'FILE';
+}
+
+function renderPendingPostflightAttachments() {
+  postflightPendingAttachments.innerHTML = pendingPostflightAttachments.map((file, index) => `<span><b>${escapeHtml(attachmentType(file.name))}</b>${escapeHtml(file.name)}<small>${escapeHtml(file.size)}</small><button type="button" data-remove-postflight-attachment="${index}" aria-label="删除 ${escapeHtml(file.name)}">×</button></span>`).join('');
+}
+
+function openPostflightDialog(log = null) {
+  postflightLogForm.reset();
+  editingPostflightLogId = log?.id || null;
+  pendingPostflightAttachments = log?.attachments?.map(file => ({ ...file })) || [];
+  renderPendingPostflightAttachments();
+  postflightServiceProject.value = '';
+  postflightServiceProject.dataset.code = '';
+  if (log?.code) selectPostflightServiceOption(log.code);
+  postflightLogDescription.value = log?.description || '';
+  postflightLogCharCount.textContent = String(postflightLogDescription.value.length);
+  const ratingInput = log ? postflightLogForm.querySelector(`input[name="postflightRating"][value="${log.rating}"]`) : null;
+  if (ratingInput) ratingInput.checked = true;
+  document.querySelector('#postflightDialogModeLabel').textContent = log ? '编辑记录' : '新增记录';
+  document.querySelector('#savePostflightLog').textContent = log ? '保存修改' : '保存';
+  postflightLogDialog.showModal();
+  postflightServiceProject.focus();
+}
+
+function closePostflightDialog() {
+  postflightLogDialog.close();
+}
+
+document.querySelector('#openPostflightLogDialog')?.addEventListener('click', () => openPostflightDialog());
+document.querySelector('#closePostflightLogDialog')?.addEventListener('click', closePostflightDialog);
+document.querySelector('#cancelPostflightLog')?.addEventListener('click', closePostflightDialog);
+postflightServiceProject?.addEventListener('focus', () => renderPostflightServiceOptions(postflightServiceProject.value));
+postflightServiceProject?.addEventListener('input', () => {
+  postflightServiceProject.dataset.code = '';
+  postflightServiceProject.setCustomValidity('');
+  renderPostflightServiceOptions(postflightServiceProject.value);
+});
+postflightServiceProject?.addEventListener('keydown', event => {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    if (postflightServiceProjectList.hidden) renderPostflightServiceOptions(postflightServiceProject.value);
+    const options = [...postflightServiceProjectList.querySelectorAll('[role="option"]')];
+    setActivePostflightServiceOption(event.key === 'ArrowDown' ? activePostflightServiceOption + 1 : activePostflightServiceOption < 0 ? options.length - 1 : activePostflightServiceOption - 1);
+    return;
+  }
+  if (event.key === 'Enter' && !postflightServiceProjectList.hidden) {
+    const option = postflightServiceProjectList.querySelectorAll('[role="option"]')[activePostflightServiceOption];
+    if (option) {
+      event.preventDefault();
+      selectPostflightServiceOption(option.dataset.serviceCode);
+    }
+    return;
+  }
+  if (event.key === 'Escape' && !postflightServiceProjectList.hidden) {
+    event.preventDefault();
+    event.stopPropagation();
+    closePostflightServiceOptions();
+  }
+});
+document.querySelector('#togglePostflightServiceProject')?.addEventListener('click', () => {
+  if (postflightServiceProjectList.hidden) renderPostflightServiceOptions('');
+  else closePostflightServiceOptions();
+  postflightServiceProject.focus();
+});
+postflightServiceProjectList?.addEventListener('mousedown', event => event.preventDefault());
+postflightServiceProjectList?.addEventListener('click', event => {
+  const option = event.target.closest('[data-service-code]');
+  if (option) selectPostflightServiceOption(option.dataset.serviceCode);
+});
+postflightServiceCombobox?.addEventListener('focusout', () => window.setTimeout(() => {
+  if (!postflightServiceCombobox.contains(document.activeElement)) closePostflightServiceOptions();
+}, 0));
+postflightLogDialog?.addEventListener('cancel', event => {
+  event.preventDefault();
+  closePostflightDialog();
+});
+postflightLogDescription?.addEventListener('input', () => {
+  postflightLogCharCount.textContent = String(postflightLogDescription.value.length);
+});
+document.querySelector('#postflightLogAttachments')?.addEventListener('change', event => {
+  pendingPostflightAttachments.push(...[...event.target.files].map(file => ({ name: file.name, size: formatAttachmentSize(file.size) })));
+  renderPendingPostflightAttachments();
+  event.target.value = '';
+});
+postflightPendingAttachments?.addEventListener('click', event => {
+  const removeButton = event.target.closest('[data-remove-postflight-attachment]');
+  if (!removeButton) return;
+  pendingPostflightAttachments.splice(Number(removeButton.dataset.removePostflightAttachment), 1);
+  renderPendingPostflightAttachments();
+});
+postflightLogList?.addEventListener('click', event => {
+  const editButton = event.target.closest('[data-edit-postflight-log]');
+  if (editButton) {
+    const log = postflightLogs.find(item => item.id === editButton.dataset.editPostflightLog);
+    if (log) openPostflightDialog(log);
+    return;
+  }
+  const deleteButton = event.target.closest('[data-delete-postflight-log]');
+  if (!deleteButton) return;
+  const log = postflightLogs.find(item => item.id === deleteButton.dataset.deletePostflightLog);
+  if (!log) return;
+  if (deleteButton.dataset.confirmed !== 'true') {
+    deleteButton.dataset.confirmed = 'true';
+    deleteButton.classList.add('is-confirming');
+    deleteButton.textContent = '确认删除';
+    window.setTimeout(() => {
+      if (!deleteButton.isConnected) return;
+      deleteButton.dataset.confirmed = 'false';
+      deleteButton.classList.remove('is-confirming');
+      deleteButton.textContent = '删除';
+    }, 3000);
+    return;
+  }
+  postflightLogs = postflightLogs.filter(item => item.id !== log.id);
+  savePostflightLogs();
+  renderPostflightLogs();
+  showToast('航后日志已删除');
+});
+postflightLogForm?.addEventListener('submit', event => {
+  event.preventDefault();
+  const selectedService = serviceEvaluationOptions.find(([code]) => code === postflightServiceProject.dataset.code)
+    || exactServiceOption(postflightServiceProject.value);
+  if (!selectedService) {
+    postflightServiceProject.setCustomValidity('请从下拉列表中选择服务项目');
+    postflightServiceProject.reportValidity();
+    postflightServiceProject.focus();
+    return;
+  }
+  selectPostflightServiceOption(selectedService[0]);
+  if (!postflightLogForm.reportValidity()) return;
+  const rating = new FormData(postflightLogForm).get('postflightRating');
+  const currentLog = postflightLogs.find(item => item.id === editingPostflightLogId);
+  const nextLog = {
+    id: currentLog?.id || `${Date.now()}`,
+    code: selectedService[0],
+    rating,
+    description: postflightLogDescription.value.trim(),
+    attachments: pendingPostflightAttachments.map(file => ({ ...file })),
+    creator: currentLog?.creator || '张园',
+    createdAt: currentLog?.createdAt || new Date().toISOString(),
+  };
+  if (currentLog) postflightLogs = postflightLogs.map(item => item.id === currentLog.id ? nextLog : item);
+  else postflightLogs.unshift(nextLog);
+  savePostflightLogs();
+  renderPostflightLogs();
+  closePostflightDialog();
+  showToast(currentLog ? '航后日志已更新' : '航后日志已保存');
 });
 
-document.querySelector('[data-export-all]')?.addEventListener('click', () => {
-  const keys = Object.keys(exportMaterials);
-  keys.forEach((key, index) => setTimeout(() => exportMaterial(key), index * 120));
-  showToast('全部物料已生成并开始下载');
-});
+renderPostflightLogs();
 
 document.querySelectorAll('.filters button').forEach(button => button.addEventListener('click', () => {
   button.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
   button.classList.add('active');
 }));
+
+const groundServiceStorageKey = `starjet-ground-service:${detailParams.get('flightId') || 'default'}`;
+const defaultGroundService = {
+  dep: {
+    basics: [
+      { label: '地面代理', value: '上海机场尚捷', status: '已确认', tone: 'ready' },
+      { label: '停机位', value: '公务机坪 609', status: '已确认', tone: 'ready' },
+      { label: 'GPU', value: '已预订', status: '已确认', tone: 'ready' },
+      { label: '餐食交付', value: '11:10 LT', status: '部分确认', tone: 'warning' },
+    ],
+    location: { fbo: 1, name: '上海机场尚捷商务航空管理有限公司', addr: '上海市长宁区迎宾七路99号', phone: '', lon: '121.346571', lat: '31.186802', googleMaplink: '', routeMapImgList: [] },
+    guarantors: [{ guarantorCompany: '', guarantorName: '曹一望 Evan', guarantorPhone: '15021608600' }],
+  },
+  arr: {
+    basics: [
+      { label: '地面代理', value: 'Astana Aviation', status: '已确认', tone: 'ready' },
+      { label: '停机位', value: 'Business Apron', status: '已确认', tone: 'ready' },
+      { label: 'CIQ', value: '公务机通道', status: '已确认', tone: 'ready' },
+      { label: '旅客交通', value: '待供应商回复', status: '待确认', tone: 'warning' },
+    ],
+    location: { fbo: 1, name: 'Astana Aviation Services (Business Terminal)', addr: 'Qabanbay Batyr Ave, Astana 020000', phone: '', lon: '71.45279903085687', lat: '51.02315528959985', googleMaplink: 'https://maps.app.goo.gl/MzRrkRn2t1He3mXQA', routeMapImgList: ['https://cdn.rsscc.cn/huoli/huoli_image/huolijingxuan/2026-09/17/1676570.jpg?id=1676570&size=1080x1080'] },
+    guarantors: [{ guarantorCompany: '', guarantorName: 'Aidar', guarantorPhone: '+77010720220' }],
+  },
+};
+const defaultMealMenu = {
+  count: 27,
+  title: '餐单',
+  status: '部分确认',
+  menuDetail: [
+    { category: { main: '西式早餐', sub: '早餐全餐' }, dishes: [
+      { name: '传家宝番茄黄瓜鲜叶沙拉', desc: 'Heirloom Tomatoes, Cucumber and Fresh Leaves Salad' },
+      { name: '烟熏三文鱼配牛油果酱', desc: 'Smoked Salmon & Avocado' },
+      { name: '西式煎蛋卷', desc: 'Western Omelette' },
+      { name: '鸡肉香肠、脆培根配黑豆', desc: 'Chicken Sausage, Crispy Bacon & Black Beans' },
+      { name: '烤小番茄芦笋配薯饼', desc: 'Roasted Cherry Tomatoes and Asparagus & Hashbrown' },
+      { name: '希腊酸奶配格兰诺拉麦片', desc: 'Greek Yogurt and Granola' },
+      { name: '新鲜蓝莓、桑葚与草莓', desc: 'Fresh Blueberries, Mulberries & Strawberries' },
+    ] },
+    { category: { main: '晚餐：鸡汁黄鱼套餐', sub: '沙拉前菜' }, dishes: [{ name: '皇家奥西特拉鱼子酱及传统佐餐配料', desc: 'Royal Oscietra Caviar & Traditional Garnishes' }] },
+    { category: { main: '晚餐：鸡汁黄鱼套餐', sub: '汤品' }, dishes: [{ name: '十年陈皮老鸭汤', desc: 'Duck Soup with Orange Skin' }] },
+    { category: { main: '晚餐：鸡汁黄鱼套餐', sub: '主菜配菜' }, dishes: [
+      { name: '云南火腿鸡汁蒸大黄鱼', desc: 'Steamed Grouper Fish with Ham & Soy Sauce' },
+      { name: '鱼仔蜂窝生蚝', desc: 'Crispy Oyster' },
+      { name: '黑蒜薄荷炒雪花牛小排', desc: 'Wok Fried Wagyu Beef Ribs with Garlic & Mint' },
+      { name: '翡翠鸡纵菌', desc: 'Wok Fried Mushroom' },
+      { name: '时令蔬菜', desc: 'Wok Fried Seasonal Vegetable' },
+      { name: '米饭', desc: 'Steamed Rice' },
+    ] },
+    { category: { main: '晚餐：鸡汁黄鱼套餐', sub: '甜品' }, dishes: [
+      { name: '天鹅酥', desc: 'Swan Shape Puff Pastry' },
+      { name: '精美水果拼盘', desc: 'Assorted Fresh Sliced Fruits' },
+    ] },
+    { category: { main: '晚餐：小青龙套餐', sub: '沙拉前菜' }, dishes: [{ name: '皇家奥西特拉鱼子酱及传统佐餐配料', desc: 'Royal Oscietra Caviar & Traditional Garnishes' }] },
+    { category: { main: '晚餐：小青龙套餐', sub: '汤品' }, dishes: [{ name: '松茸羊肚菌炖乳鸽', desc: 'Pigeon Soup with Mushroom' }] },
+    { category: { main: '晚餐：小青龙套餐', sub: '主菜配菜' }, dishes: [
+      { name: '古法家烧三年甲鱼', desc: 'Braised Shelled Turtle' },
+      { name: '鲍汁扣二头鲜鲍', desc: 'Braised Abalone' },
+      { name: '风范汁焗小青龙', desc: 'Baked Boston Lobster' },
+      { name: '海鲜馄饨', desc: 'Seafood Wonton' },
+      { name: '西芹炒九年百合', desc: 'Wok Fried Celery with Lily Bulb' },
+      { name: '时令蔬菜', desc: 'Wok Fried Seasonal Vegetable' },
+      { name: '米饭', desc: 'Steamed Rice' },
+    ] },
+    { category: { main: '晚餐：小青龙套餐', sub: '甜品' }, dishes: [{ name: '精美水果拼盘', desc: 'Assorted Fresh Sliced Fruits' }] },
+  ],
+};
+
+function cloneData(value) { return JSON.parse(JSON.stringify(value)); }
+function readGroundService() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(groundServiceStorageKey) || 'null');
+    return saved?.services?.dep && saved?.services?.arr && saved?.meal?.menuDetail ? saved : { services: cloneData(defaultGroundService), meal: cloneData(defaultMealMenu) };
+  } catch { return { services: cloneData(defaultGroundService), meal: cloneData(defaultMealMenu) }; }
+}
+let groundServiceState = readGroundService();
+let editingServiceStation = 'dep';
+
+function saveGroundServiceState() { localStorage.setItem(groundServiceStorageKey, JSON.stringify(groundServiceState)); }
+function safeHttpUrl(value) {
+  try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : ''; } catch { return ''; }
+}
+function dishCount() { return groundServiceState.meal.menuDetail.reduce((total, group) => total + group.dishes.length, 0); }
+
+function renderServiceLocation(station) {
+  const location = groundServiceState.services[station].location;
+  const target = document.querySelector(`#serviceLocation${station === 'dep' ? 'Dep' : 'Arr'}`);
+  const mapLink = safeHttpUrl(location.googleMaplink);
+  const routeMapLink = safeHttpUrl(location.routeMapImgList?.[0] || '');
+  const phone = String(location.phone || '').trim();
+  target.innerHTML = `<div class="service-location-name"><i aria-hidden="true"></i><b>${escapeHtml(location.name || '待配置地点')}</b></div><address>${escapeHtml(location.addr || '地址待补充')}</address><div class="service-location-meta"><span>${phone ? `电话 ${escapeHtml(phone)}` : '电话待补充'}</span><span>${escapeHtml(location.lat || '—')}, ${escapeHtml(location.lon || '—')}</span></div><div class="service-location-actions">${mapLink ? `<a href="${escapeHtml(mapLink)}" target="_blank" rel="noopener">打开地图</a>` : '<span>地图链接待补充</span>'}${routeMapLink ? `<a href="${escapeHtml(routeMapLink)}" target="_blank" rel="noopener">查看路线图（${location.routeMapImgList.length}）</a>` : `<span>路线图 ${location.routeMapImgList?.length || 0} 张</span>`}</div>`;
+}
+
+function renderGuarantors(station) {
+  const target = document.querySelector(`#serviceGuarantor${station === 'dep' ? 'Dep' : 'Arr'}`);
+  const guarantors = groundServiceState.services[station].guarantors;
+  target.innerHTML = guarantors.length ? guarantors.map((person, index) => {
+    const name = person.guarantorName?.trim() || '待填写';
+    const phone = person.guarantorPhone?.trim() || '';
+    const initials = [...name].slice(0, 2).join('');
+    const phoneHref = phone ? `tel:${phone.replace(/[^+\d]/g, '')}` : '';
+    return `<article class="guarantor-item"><span class="guarantor-avatar">${escapeHtml(initials)}</span><div><b>${escapeHtml(name)}</b><small>${escapeHtml(person.guarantorCompany?.trim() || '行程保障人')}</small></div><div class="guarantor-actions">${phoneHref ? `<a href="${escapeHtml(phoneHref)}">${escapeHtml(phone)}</a>` : '<span>电话待补充</span>'}<button type="button" data-remove-guarantor="${station}:${index}" aria-label="删除保障人 ${escapeHtml(name)}">×</button></div></article>`;
+  }).join('') : '<div class="guarantor-empty">尚未配置行程保障人</div>';
+}
+
+function renderServiceBasics(station) {
+  const target = document.querySelector(`[data-service-station="${station}"] .service-checklist`);
+  target.innerHTML = groundServiceState.services[station].basics.map(item => `<div><span>${escapeHtml(item.label)}</span><b>${escapeHtml(item.value)}</b><em class="is-${item.tone}">${escapeHtml(item.status)}</em></div>`).join('');
+}
+
+function renderMealSummary() {
+  const count = dishCount();
+  groundServiceState.meal.count = count;
+  document.querySelector('#mealDishCount').textContent = count;
+  document.querySelector('#mealDishCountInline').textContent = count;
+  document.querySelector('#mealDialogCount').textContent = count;
+  document.querySelector('#mealStatus').value = groundServiceState.meal.status || '部分确认';
+  const planMap = new Map();
+  groundServiceState.meal.menuDetail.forEach(group => planMap.set(group.category.main, (planMap.get(group.category.main) || 0) + group.dishes.length));
+  document.querySelector('#mealPlanStrip').innerHTML = [...planMap].map(([name, total]) => `<div class="meal-plan-chip"><b>${escapeHtml(name)}</b><span>${total} 道菜 · ${groundServiceState.meal.status}</span></div>`).join('');
+}
+
+function renderGroundService() {
+  ['dep', 'arr'].forEach(station => { renderServiceBasics(station); renderServiceLocation(station); renderGuarantors(station); });
+  renderMealSummary();
+}
+
+function renderGuarantorEditor() {
+  const target = document.querySelector('#serviceGuarantorEditor');
+  target.innerHTML = groundServiceState.services[editingServiceStation].guarantors.map((person, index) => `<div class="guarantor-editor-row" data-guarantor-index="${index}"><input value="${escapeHtml(person.guarantorName)}" placeholder="姓名" aria-label="保障人姓名"><input value="${escapeHtml(person.guarantorCompany)}" placeholder="公司（可选）" aria-label="保障人公司"><input value="${escapeHtml(person.guarantorPhone)}" placeholder="联系电话" aria-label="保障人电话"><button type="button" data-remove-guarantor-row="${index}" aria-label="删除该保障人">×</button></div>`).join('');
+}
+
+function openGroundServiceDialog(station, addGuarantor = false) {
+  editingServiceStation = station;
+  const service = groundServiceState.services[station];
+  const [handler, stand, extra, pending] = service.basics;
+  document.querySelector('#groundServiceDialogStation').textContent = station === 'dep' ? 'DEP · 起飞站' : 'ARR · 到达站';
+  document.querySelector('#serviceHandlerInput').value = handler.value;
+  document.querySelector('#serviceStandInput').value = stand.value;
+  document.querySelector('#serviceExtraNameInput').value = extra.label;
+  document.querySelector('#serviceExtraValueInput').value = extra.value;
+  document.querySelector('#servicePendingNameInput').value = pending.label;
+  document.querySelector('#servicePendingValueInput').value = pending.value;
+  document.querySelector('#serviceLocationNameInput').value = service.location.name || '';
+  document.querySelector('#serviceLocationAddressInput').value = service.location.addr || '';
+  document.querySelector('#serviceLocationPhoneInput').value = service.location.phone || '';
+  document.querySelector('#serviceLocationMapInput').value = service.location.googleMaplink || '';
+  document.querySelector('#serviceLocationLonInput').value = service.location.lon || '';
+  document.querySelector('#serviceLocationLatInput').value = service.location.lat || '';
+  document.querySelector('#serviceLocationImagesInput').value = (service.location.routeMapImgList || []).join('\n');
+  if (addGuarantor) service.guarantors.push({ guarantorCompany: '', guarantorName: '', guarantorPhone: '' });
+  renderGuarantorEditor();
+  document.querySelector('#groundServiceDialog').showModal();
+  if (addGuarantor) document.querySelector('#serviceGuarantorEditor .guarantor-editor-row:last-child input')?.focus();
+}
+
+function readGuarantorEditor() {
+  return [...document.querySelectorAll('#serviceGuarantorEditor .guarantor-editor-row')].map(row => {
+    const [name, company, phone] = row.querySelectorAll('input');
+    return { guarantorName: name.value.trim(), guarantorCompany: company.value.trim(), guarantorPhone: phone.value.trim() };
+  }).filter(person => person.guarantorName || person.guarantorPhone || person.guarantorCompany);
+}
+
+document.querySelectorAll('[data-edit-service]').forEach(button => button.addEventListener('click', () => openGroundServiceDialog(button.dataset.editService)));
+document.querySelectorAll('[data-add-guarantor]').forEach(button => button.addEventListener('click', () => openGroundServiceDialog(button.dataset.addGuarantor, true)));
+function cancelGroundServiceEdit() { groundServiceState = readGroundService(); renderGroundService(); document.querySelector('#groundServiceDialog').close(); }
+document.querySelector('#closeGroundService')?.addEventListener('click', cancelGroundServiceEdit);
+document.querySelector('#cancelGroundService')?.addEventListener('click', cancelGroundServiceEdit);
+document.querySelector('#addGuarantorRow')?.addEventListener('click', () => {
+  groundServiceState.services[editingServiceStation].guarantors = readGuarantorEditor();
+  groundServiceState.services[editingServiceStation].guarantors.push({ guarantorCompany: '', guarantorName: '', guarantorPhone: '' });
+  renderGuarantorEditor();
+  document.querySelector('#serviceGuarantorEditor .guarantor-editor-row:last-child input')?.focus();
+});
+document.querySelector('#serviceGuarantorEditor')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-remove-guarantor-row]');
+  if (!button) return;
+  groundServiceState.services[editingServiceStation].guarantors = readGuarantorEditor();
+  groundServiceState.services[editingServiceStation].guarantors.splice(Number(button.dataset.removeGuarantorRow), 1);
+  renderGuarantorEditor();
+});
+document.querySelector('#groundServiceForm')?.addEventListener('submit', event => {
+  event.preventDefault();
+  const service = groundServiceState.services[editingServiceStation];
+  service.basics = [
+    { label: '地面代理', value: document.querySelector('#serviceHandlerInput').value.trim(), status: '已确认', tone: 'ready' },
+    { label: '停机位', value: document.querySelector('#serviceStandInput').value.trim(), status: '已确认', tone: 'ready' },
+    { label: document.querySelector('#serviceExtraNameInput').value.trim(), value: document.querySelector('#serviceExtraValueInput').value.trim(), status: '已确认', tone: 'ready' },
+    { label: document.querySelector('#servicePendingNameInput').value.trim(), value: document.querySelector('#servicePendingValueInput').value.trim(), status: '待确认', tone: 'warning' },
+  ];
+  service.location = {
+    fbo: 1,
+    name: document.querySelector('#serviceLocationNameInput').value.trim(),
+    addr: document.querySelector('#serviceLocationAddressInput').value.trim(),
+    phone: document.querySelector('#serviceLocationPhoneInput').value.trim(),
+    googleMaplink: document.querySelector('#serviceLocationMapInput').value.trim(),
+    lon: document.querySelector('#serviceLocationLonInput').value.trim(),
+    lat: document.querySelector('#serviceLocationLatInput').value.trim(),
+    routeMapImgList: document.querySelector('#serviceLocationImagesInput').value.split('\n').map(value => value.trim()).filter(Boolean),
+  };
+  service.guarantors = readGuarantorEditor();
+  saveGroundServiceState();
+  renderGroundService();
+  document.querySelector('#groundServiceDialog').close();
+  showToast('保障信息已保存');
+});
+document.querySelector('.service-workbench')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-remove-guarantor]');
+  if (!button) return;
+  const [station, index] = button.dataset.removeGuarantor.split(':');
+  groundServiceState.services[station].guarantors.splice(Number(index), 1);
+  saveGroundServiceState();
+  renderGuarantors(station);
+  showToast('保障人已移除');
+});
+document.querySelector('#saveGroundService')?.addEventListener('click', () => { saveGroundServiceState(); showToast('地面保障配置已保存'); });
+
+function renderMealMenuEditor() {
+  document.querySelector('#mealDialogCount').textContent = dishCount();
+  document.querySelector('#mealMenuEditor').innerHTML = groundServiceState.meal.menuDetail.map((group, categoryIndex) => `<section class="meal-category-editor" data-category-index="${categoryIndex}"><div class="meal-category-head"><input value="${escapeHtml(group.category.main)}" data-category-field="main" aria-label="餐食方案"><input value="${escapeHtml(group.category.sub)}" data-category-field="sub" aria-label="菜品分类"><button type="button" data-remove-meal-category="${categoryIndex}">删除分类</button></div><div class="meal-dish-list">${group.dishes.map((dish, dishIndex) => `<div class="meal-dish-editor" data-dish-index="${dishIndex}"><input value="${escapeHtml(dish.name)}" data-dish-field="name" placeholder="中文菜名" aria-label="中文菜名"><input value="${escapeHtml(dish.desc)}" data-dish-field="desc" placeholder="英文说明" aria-label="英文说明"><button type="button" data-remove-meal-dish="${categoryIndex}:${dishIndex}" aria-label="删除菜品 ${escapeHtml(dish.name)}">×</button></div>`).join('')}</div><button class="add-meal-dish" type="button" data-add-meal-dish="${categoryIndex}">+ 添加菜品</button></section>`).join('');
+}
+
+function syncMealEditorState() {
+  [...document.querySelectorAll('.meal-category-editor')].forEach((categoryNode, categoryIndex) => {
+    const group = groundServiceState.meal.menuDetail[categoryIndex];
+    if (!group) return;
+    group.category.main = categoryNode.querySelector('[data-category-field="main"]').value.trim();
+    group.category.sub = categoryNode.querySelector('[data-category-field="sub"]').value.trim();
+    group.dishes = [...categoryNode.querySelectorAll('.meal-dish-editor')].map(dishNode => ({ name: dishNode.querySelector('[data-dish-field="name"]').value.trim(), desc: dishNode.querySelector('[data-dish-field="desc"]').value.trim() })).filter(dish => dish.name || dish.desc);
+  });
+}
+
+document.querySelector('#openMealMenu')?.addEventListener('click', () => { renderMealMenuEditor(); document.querySelector('#mealMenuDialog').showModal(); });
+function cancelMealMenuEdit() { groundServiceState = readGroundService(); renderGroundService(); document.querySelector('#mealMenuDialog').close(); }
+document.querySelector('#closeMealMenu')?.addEventListener('click', cancelMealMenuEdit);
+document.querySelector('#cancelMealMenu')?.addEventListener('click', cancelMealMenuEdit);
+document.querySelector('#addMealCategory')?.addEventListener('click', () => {
+  syncMealEditorState();
+  groundServiceState.meal.menuDetail.push({ category: { main: '新增餐食方案', sub: '新增分类' }, dishes: [{ name: '', desc: '' }] });
+  renderMealMenuEditor();
+  document.querySelector('#mealMenuEditor .meal-category-editor:last-child input')?.focus();
+});
+document.querySelector('#mealMenuEditor')?.addEventListener('click', event => {
+  const addDish = event.target.closest('[data-add-meal-dish]');
+  const removeDish = event.target.closest('[data-remove-meal-dish]');
+  const removeCategory = event.target.closest('[data-remove-meal-category]');
+  syncMealEditorState();
+  if (addDish) groundServiceState.meal.menuDetail[Number(addDish.dataset.addMealDish)].dishes.push({ name: '', desc: '' });
+  if (removeDish) { const [categoryIndex, dishIndex] = removeDish.dataset.removeMealDish.split(':').map(Number); groundServiceState.meal.menuDetail[categoryIndex].dishes.splice(dishIndex, 1); }
+  if (removeCategory) groundServiceState.meal.menuDetail.splice(Number(removeCategory.dataset.removeMealCategory), 1);
+  if (addDish || removeDish || removeCategory) renderMealMenuEditor();
+});
+document.querySelector('#mealMenuForm')?.addEventListener('submit', event => {
+  event.preventDefault();
+  syncMealEditorState();
+  groundServiceState.meal.status = document.querySelector('#mealStatus').value;
+  saveGroundServiceState();
+  renderMealSummary();
+  document.querySelector('#mealMenuDialog').close();
+  showToast(`餐单已保存，共 ${dishCount()} 道菜`);
+});
+document.querySelector('#mealStatus')?.addEventListener('change', event => {
+  groundServiceState.meal.status = event.target.value;
+  saveGroundServiceState();
+  renderMealSummary();
+  showToast(`餐单状态已更新为${event.target.value}`);
+});
+
+renderGroundService();
