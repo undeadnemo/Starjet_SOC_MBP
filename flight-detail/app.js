@@ -424,11 +424,6 @@ function renderMissionReadiness() {
   context.arc(center, center, radius - ringWidth / 2, 0, Math.PI * 2);
   context.fillStyle = colors.surface;
   context.fill();
-  context.beginPath();
-  context.arc(center, center, size * .475, 0, Math.PI * 2);
-  context.lineWidth = 1;
-  context.strokeStyle = colors.inner;
-  context.stroke();
   context.lineWidth = ringWidth;
   context.lineCap = 'butt';
   context.beginPath();
@@ -1491,22 +1486,10 @@ document.querySelectorAll('.filters button').forEach(button => button.addEventLi
 const groundServiceStorageKey = `starjet-ground-service:${detailParams.get('flightId') || 'default'}`;
 const defaultGroundService = {
   dep: {
-    basics: [
-      { label: '地面代理', value: '上海机场尚捷', status: '已确认', tone: 'ready' },
-      { label: '停机位', value: '公务机坪 609', status: '已确认', tone: 'ready' },
-      { label: 'GPU', value: '已预订', status: '已确认', tone: 'ready' },
-      { label: '餐食交付', value: '11:10 LT', status: '部分确认', tone: 'warning' },
-    ],
     location: { fbo: 1, name: '上海机场尚捷商务航空管理有限公司', addr: '上海市长宁区迎宾七路99号', phone: '', lon: '121.346571', lat: '31.186802', googleMaplink: '', routeMapImgList: [] },
     guarantors: [{ guarantorCompany: '', guarantorName: '曹一望 Evan', guarantorPhone: '15021608600' }],
   },
   arr: {
-    basics: [
-      { label: '地面代理', value: 'Astana Aviation', status: '已确认', tone: 'ready' },
-      { label: '停机位', value: 'Business Apron', status: '已确认', tone: 'ready' },
-      { label: 'CIQ', value: '公务机通道', status: '已确认', tone: 'ready' },
-      { label: '旅客交通', value: '待供应商回复', status: '待确认', tone: 'warning' },
-    ],
     location: { fbo: 1, name: 'Astana Aviation Services (Business Terminal)', addr: 'Qabanbay Batyr Ave, Astana 020000', phone: '', lon: '71.45279903085687', lat: '51.02315528959985', googleMaplink: 'https://maps.app.goo.gl/MzRrkRn2t1He3mXQA', routeMapImgList: ['https://cdn.rsscc.cn/huoli/huoli_image/huolijingxuan/2026-09/17/1676570.jpg?id=1676570&size=1080x1080'] },
     guarantors: [{ guarantorCompany: '', guarantorName: 'Aidar', guarantorPhone: '+77010720220' }],
   },
@@ -1591,11 +1574,6 @@ function renderGuarantors(station) {
   }).join('') : '<div class="guarantor-empty">尚未配置行程保障人</div>';
 }
 
-function renderServiceBasics(station) {
-  const target = document.querySelector(`[data-service-station="${station}"] .service-checklist`);
-  target.innerHTML = groundServiceState.services[station].basics.map(item => `<div><span>${escapeHtml(item.label)}</span><b>${escapeHtml(item.value)}</b><em class="is-${item.tone}">${escapeHtml(item.status)}</em></div>`).join('');
-}
-
 function renderMealSummary() {
   const count = dishCount();
   groundServiceState.meal.count = count;
@@ -1609,7 +1587,9 @@ function renderMealSummary() {
 }
 
 function renderGroundService() {
-  ['dep', 'arr'].forEach(station => { renderServiceBasics(station); renderServiceLocation(station); renderGuarantors(station); });
+  ['dep', 'arr'].forEach(station => { renderServiceLocation(station); renderGuarantors(station); });
+  document.querySelector('#serviceLocationCount').textContent = ['dep', 'arr'].filter(station => groundServiceState.services[station].location?.name).length;
+  document.querySelector('#serviceGuarantorCount').textContent = ['dep', 'arr'].reduce((total, station) => total + groundServiceState.services[station].guarantors.length, 0);
   renderMealSummary();
 }
 
@@ -1621,14 +1601,7 @@ function renderGuarantorEditor() {
 function openGroundServiceDialog(station, addGuarantor = false) {
   editingServiceStation = station;
   const service = groundServiceState.services[station];
-  const [handler, stand, extra, pending] = service.basics;
   document.querySelector('#groundServiceDialogStation').textContent = station === 'dep' ? 'DEP · 起飞站' : 'ARR · 到达站';
-  document.querySelector('#serviceHandlerInput').value = handler.value;
-  document.querySelector('#serviceStandInput').value = stand.value;
-  document.querySelector('#serviceExtraNameInput').value = extra.label;
-  document.querySelector('#serviceExtraValueInput').value = extra.value;
-  document.querySelector('#servicePendingNameInput').value = pending.label;
-  document.querySelector('#servicePendingValueInput').value = pending.value;
   document.querySelector('#serviceLocationNameInput').value = service.location.name || '';
   document.querySelector('#serviceLocationAddressInput').value = service.location.addr || '';
   document.querySelector('#serviceLocationPhoneInput').value = service.location.phone || '';
@@ -1649,7 +1622,6 @@ function readGuarantorEditor() {
   }).filter(person => person.guarantorName || person.guarantorPhone || person.guarantorCompany);
 }
 
-document.querySelectorAll('[data-edit-service]').forEach(button => button.addEventListener('click', () => openGroundServiceDialog(button.dataset.editService)));
 document.querySelectorAll('[data-add-guarantor]').forEach(button => button.addEventListener('click', () => openGroundServiceDialog(button.dataset.addGuarantor, true)));
 function cancelGroundServiceEdit() { groundServiceState = readGroundService(); renderGroundService(); document.querySelector('#groundServiceDialog').close(); }
 document.querySelector('#closeGroundService')?.addEventListener('click', cancelGroundServiceEdit);
@@ -1670,12 +1642,6 @@ document.querySelector('#serviceGuarantorEditor')?.addEventListener('click', eve
 document.querySelector('#groundServiceForm')?.addEventListener('submit', event => {
   event.preventDefault();
   const service = groundServiceState.services[editingServiceStation];
-  service.basics = [
-    { label: '地面代理', value: document.querySelector('#serviceHandlerInput').value.trim(), status: '已确认', tone: 'ready' },
-    { label: '停机位', value: document.querySelector('#serviceStandInput').value.trim(), status: '已确认', tone: 'ready' },
-    { label: document.querySelector('#serviceExtraNameInput').value.trim(), value: document.querySelector('#serviceExtraValueInput').value.trim(), status: '已确认', tone: 'ready' },
-    { label: document.querySelector('#servicePendingNameInput').value.trim(), value: document.querySelector('#servicePendingValueInput').value.trim(), status: '待确认', tone: 'warning' },
-  ];
   service.location = {
     fbo: 1,
     name: document.querySelector('#serviceLocationNameInput').value.trim(),
@@ -1703,44 +1669,243 @@ document.querySelector('.service-workbench')?.addEventListener('click', event =>
 });
 document.querySelector('#saveGroundService')?.addEventListener('click', () => { saveGroundServiceState(); showToast('地面保障配置已保存'); });
 
+let mealEditorTree = [];
+const collapsedMealMenus = new Set();
+const collapsedMealGroups = new Set();
+let draggedMealDish = null;
+let draggedMealMenu = null;
+let draggedMealGroup = null;
+
+function buildMealEditorTree() {
+  const menus = new Map();
+  groundServiceState.meal.menuDetail.forEach(group => {
+    const menuName = group.category.main || '未命名餐单';
+    if (!menus.has(menuName)) menus.set(menuName, { name: menuName, groups: [] });
+    menus.get(menuName).groups.push({ name: group.category.sub || '未命名分组', dishes: cloneData(group.dishes) });
+  });
+  return [...menus.values()];
+}
+
+function mealEditorDishCount() {
+  return mealEditorTree.reduce((menuTotal, menu) => menuTotal + menu.groups.reduce((groupTotal, group) => groupTotal + group.dishes.length, 0), 0);
+}
+
 function renderMealMenuEditor() {
-  document.querySelector('#mealDialogCount').textContent = dishCount();
-  document.querySelector('#mealMenuEditor').innerHTML = groundServiceState.meal.menuDetail.map((group, categoryIndex) => `<section class="meal-category-editor" data-category-index="${categoryIndex}"><div class="meal-category-head"><input value="${escapeHtml(group.category.main)}" data-category-field="main" aria-label="餐食方案"><input value="${escapeHtml(group.category.sub)}" data-category-field="sub" aria-label="菜品分类"><button type="button" data-remove-meal-category="${categoryIndex}">删除分类</button></div><div class="meal-dish-list">${group.dishes.map((dish, dishIndex) => `<div class="meal-dish-editor" data-dish-index="${dishIndex}"><input value="${escapeHtml(dish.name)}" data-dish-field="name" placeholder="中文菜名" aria-label="中文菜名"><input value="${escapeHtml(dish.desc)}" data-dish-field="desc" placeholder="英文说明" aria-label="英文说明"><button type="button" data-remove-meal-dish="${categoryIndex}:${dishIndex}" aria-label="删除菜品 ${escapeHtml(dish.name)}">×</button></div>`).join('')}</div><button class="add-meal-dish" type="button" data-add-meal-dish="${categoryIndex}">+ 添加菜品</button></section>`).join('');
+  const count = mealEditorDishCount();
+  document.querySelector('#mealDialogCount').textContent = count;
+  document.querySelector('#mealMenuEditor').innerHTML = mealEditorTree.map((menu, menuIndex) => {
+    const menuCollapsed = collapsedMealMenus.has(menuIndex);
+    const menuCount = menu.groups.reduce((total, group) => total + group.dishes.length, 0);
+    const groups = menu.groups.map((group, groupIndex) => {
+      const groupKey = `${menuIndex}:${groupIndex}`;
+      const collapsed = collapsedMealGroups.has(groupKey);
+      const dishes = group.dishes.map((dish, dishIndex) => `<div class="meal-dish-editor" data-dish-index="${dishIndex}"><span class="meal-tree-rail" aria-hidden="true"></span><span class="meal-drag-handle" draggable="true" data-drag-dish="${menuIndex}:${groupIndex}:${dishIndex}" role="button" tabindex="0" aria-label="拖动菜品 ${escapeHtml(dish.name || `第 ${dishIndex + 1} 项`)} 调整顺序" title="拖动调整顺序">⋮⋮</span><span class="meal-dish-order">${String(dishIndex + 1).padStart(2, '0')}</span><input value="${escapeHtml(dish.name)}" data-dish-field="name" placeholder="中文菜名" aria-label="中文菜名"><input value="${escapeHtml(dish.desc)}" data-dish-field="desc" placeholder="英文说明" aria-label="英文说明"><button type="button" data-remove-meal-dish="${menuIndex}:${groupIndex}:${dishIndex}" aria-label="删除菜品 ${escapeHtml(dish.name)}">×</button></div>`).join('');
+      return `<section class="meal-category-editor${collapsed ? ' is-collapsed' : ''}" data-group-index="${groupIndex}"><div class="meal-category-head"><span class="meal-level-drag-handle" draggable="true" data-drag-group="${menuIndex}:${groupIndex}" role="button" tabindex="0" aria-label="拖动分组 ${escapeHtml(group.name || `分组 ${groupIndex + 1}`)} 调整顺序" title="拖动调整分组顺序">⋮⋮</span><button class="meal-tree-toggle" type="button" data-toggle-meal-group="${menuIndex}:${groupIndex}" aria-expanded="${!collapsed}" aria-label="${collapsed ? '展开' : '折叠'}分组 ${escapeHtml(group.name || `分组 ${groupIndex + 1}`)}"><span aria-hidden="true">›</span></button><span class="meal-group-order">${String(groupIndex + 1).padStart(2, '0')}</span><input value="${escapeHtml(group.name)}" data-group-name aria-label="分组名称"><span class="meal-group-count">${group.dishes.length} 道菜</span><button class="meal-category-delete" type="button" data-remove-meal-group="${menuIndex}:${groupIndex}">删除分组</button></div><div class="meal-category-body"${collapsed ? ' hidden' : ''}><div class="meal-dish-list" data-drop-group="${menuIndex}:${groupIndex}">${dishes || '<div class="meal-dish-empty">暂无菜品，可点击下方按钮添加或将菜品拖入此分组</div>'}</div><button class="add-meal-dish" type="button" data-add-meal-dish="${menuIndex}:${groupIndex}">+ 添加菜品</button></div></section>`;
+    }).join('');
+    return `<section class="meal-tree-root${menuCollapsed ? ' is-collapsed' : ''}" data-menu-index="${menuIndex}"><div class="meal-tree-root-head"><span class="meal-level-drag-handle" draggable="true" data-drag-menu="${menuIndex}" role="button" tabindex="0" aria-label="拖动餐单 ${escapeHtml(menu.name)} 调整顺序" title="拖动调整餐单顺序">⋮⋮</span><button class="meal-tree-toggle" type="button" data-toggle-meal-menu="${menuIndex}" aria-expanded="${!menuCollapsed}" aria-label="${menuCollapsed ? '展开' : '折叠'}餐单 ${escapeHtml(menu.name)}"><span aria-hidden="true">›</span></button><span class="meal-menu-order">${String(menuIndex + 1).padStart(2, '0')}</span><input value="${escapeHtml(menu.name)}" data-menu-name aria-label="餐单名称"><span class="meal-menu-count">${menu.groups.length} 个分组 · ${menuCount} 道菜</span><button type="button" data-add-meal-group="${menuIndex}">+ 新增分组</button><button class="meal-menu-delete" type="button" data-remove-meal-menu="${menuIndex}">删除餐单</button></div><div class="meal-tree-groups" data-drop-menu="${menuIndex}"${menuCollapsed ? ' hidden' : ''}>${groups || '<div class="meal-tree-empty">暂无分组，请新增分组</div>'}</div></section>`;
+  }).join('') || '<div class="meal-tree-empty">暂无餐单，请点击“新增餐单”创建</div>';
 }
 
 function syncMealEditorState() {
-  [...document.querySelectorAll('.meal-category-editor')].forEach((categoryNode, categoryIndex) => {
-    const group = groundServiceState.meal.menuDetail[categoryIndex];
-    if (!group) return;
-    group.category.main = categoryNode.querySelector('[data-category-field="main"]').value.trim();
-    group.category.sub = categoryNode.querySelector('[data-category-field="sub"]').value.trim();
-    group.dishes = [...categoryNode.querySelectorAll('.meal-dish-editor')].map(dishNode => ({ name: dishNode.querySelector('[data-dish-field="name"]').value.trim(), desc: dishNode.querySelector('[data-dish-field="desc"]').value.trim() })).filter(dish => dish.name || dish.desc);
+  [...document.querySelectorAll('.meal-tree-root[data-menu-index]')].forEach(menuNode => {
+    const menuIndex = Number(menuNode.dataset.menuIndex);
+    const menu = mealEditorTree[menuIndex];
+    if (!menu) return;
+    menu.name = menuNode.querySelector('[data-menu-name]').value.trim();
+    [...menuNode.querySelectorAll('.meal-category-editor')].forEach(groupNode => {
+      const groupIndex = Number(groupNode.dataset.groupIndex);
+      const group = menu.groups[groupIndex];
+      if (!group) return;
+      group.name = groupNode.querySelector('[data-group-name]').value.trim();
+      group.dishes = [...groupNode.querySelectorAll('.meal-dish-editor')].map(dishNode => ({ name: dishNode.querySelector('[data-dish-field="name"]').value.trim(), desc: dishNode.querySelector('[data-dish-field="desc"]').value.trim() }));
+    });
   });
 }
 
-document.querySelector('#openMealMenu')?.addEventListener('click', () => { renderMealMenuEditor(); document.querySelector('#mealMenuDialog').showModal(); });
+document.querySelector('#openMealMenu')?.addEventListener('click', () => { mealEditorTree = buildMealEditorTree(); collapsedMealMenus.clear(); collapsedMealGroups.clear(); renderMealMenuEditor(); document.querySelector('#mealMenuDialog').showModal(); });
 function cancelMealMenuEdit() { groundServiceState = readGroundService(); renderGroundService(); document.querySelector('#mealMenuDialog').close(); }
 document.querySelector('#closeMealMenu')?.addEventListener('click', cancelMealMenuEdit);
 document.querySelector('#cancelMealMenu')?.addEventListener('click', cancelMealMenuEdit);
-document.querySelector('#addMealCategory')?.addEventListener('click', () => {
+document.querySelector('#addMealMenu')?.addEventListener('click', () => {
   syncMealEditorState();
-  groundServiceState.meal.menuDetail.push({ category: { main: '新增餐食方案', sub: '新增分类' }, dishes: [{ name: '', desc: '' }] });
+  mealEditorTree.push({ name: '新增餐单', groups: [{ name: '新增分组', dishes: [] }] });
+  collapsedMealMenus.delete(mealEditorTree.length - 1);
   renderMealMenuEditor();
-  document.querySelector('#mealMenuEditor .meal-category-editor:last-child input')?.focus();
+  document.querySelector('#mealMenuEditor .meal-tree-root:last-child [data-menu-name]')?.focus();
 });
 document.querySelector('#mealMenuEditor')?.addEventListener('click', event => {
+  const toggleMenu = event.target.closest('[data-toggle-meal-menu]');
+  const toggleGroup = event.target.closest('[data-toggle-meal-group]');
+  const addGroup = event.target.closest('[data-add-meal-group]');
   const addDish = event.target.closest('[data-add-meal-dish]');
   const removeDish = event.target.closest('[data-remove-meal-dish]');
-  const removeCategory = event.target.closest('[data-remove-meal-category]');
+  const removeGroup = event.target.closest('[data-remove-meal-group]');
+  const removeMenu = event.target.closest('[data-remove-meal-menu]');
   syncMealEditorState();
-  if (addDish) groundServiceState.meal.menuDetail[Number(addDish.dataset.addMealDish)].dishes.push({ name: '', desc: '' });
-  if (removeDish) { const [categoryIndex, dishIndex] = removeDish.dataset.removeMealDish.split(':').map(Number); groundServiceState.meal.menuDetail[categoryIndex].dishes.splice(dishIndex, 1); }
-  if (removeCategory) groundServiceState.meal.menuDetail.splice(Number(removeCategory.dataset.removeMealCategory), 1);
-  if (addDish || removeDish || removeCategory) renderMealMenuEditor();
+  if (toggleMenu) {
+    const menuIndex = Number(toggleMenu.dataset.toggleMealMenu);
+    if (collapsedMealMenus.has(menuIndex)) collapsedMealMenus.delete(menuIndex);
+    else collapsedMealMenus.add(menuIndex);
+  }
+  if (toggleGroup) {
+    const groupKey = toggleGroup.dataset.toggleMealGroup;
+    if (collapsedMealGroups.has(groupKey)) collapsedMealGroups.delete(groupKey);
+    else collapsedMealGroups.add(groupKey);
+  }
+  if (addGroup) {
+    const menuIndex = Number(addGroup.dataset.addMealGroup);
+    mealEditorTree[menuIndex].groups.push({ name: '新增分组', dishes: [] });
+    collapsedMealMenus.delete(menuIndex);
+  }
+  if (addDish) {
+    const [menuIndex, groupIndex] = addDish.dataset.addMealDish.split(':').map(Number);
+    mealEditorTree[menuIndex].groups[groupIndex].dishes.push({ name: '', desc: '' });
+    collapsedMealMenus.delete(menuIndex);
+    collapsedMealGroups.delete(`${menuIndex}:${groupIndex}`);
+  }
+  if (removeDish) { const [menuIndex, groupIndex, dishIndex] = removeDish.dataset.removeMealDish.split(':').map(Number); mealEditorTree[menuIndex].groups[groupIndex].dishes.splice(dishIndex, 1); }
+  if (removeGroup) { const [menuIndex, groupIndex] = removeGroup.dataset.removeMealGroup.split(':').map(Number); mealEditorTree[menuIndex].groups.splice(groupIndex, 1); collapsedMealGroups.clear(); }
+  if (removeMenu) { mealEditorTree.splice(Number(removeMenu.dataset.removeMealMenu), 1); collapsedMealMenus.clear(); collapsedMealGroups.clear(); }
+  if (toggleMenu || toggleGroup || addGroup || addDish || removeDish || removeGroup || removeMenu) renderMealMenuEditor();
+});
+
+function clearMealDropIndicators() {
+  document.querySelectorAll('.is-drop-before,.is-drop-after,.is-drop-target').forEach(node => node.classList.remove('is-drop-before', 'is-drop-after', 'is-drop-target'));
+}
+
+document.querySelector('#mealMenuEditor')?.addEventListener('dragstart', event => {
+  const menuHandle = event.target.closest('[data-drag-menu]');
+  const groupHandle = event.target.closest('[data-drag-group]');
+  const handle = event.target.closest('[data-drag-dish]');
+  if (menuHandle) {
+    syncMealEditorState();
+    draggedMealMenu = Number(menuHandle.dataset.dragMenu);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `menu:${draggedMealMenu}`);
+    menuHandle.closest('.meal-tree-root')?.classList.add('is-dragging');
+    return;
+  }
+  if (groupHandle) {
+    syncMealEditorState();
+    const [menuIndex, groupIndex] = groupHandle.dataset.dragGroup.split(':').map(Number);
+    draggedMealGroup = { menuIndex, groupIndex };
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', `group:${groupHandle.dataset.dragGroup}`);
+    groupHandle.closest('.meal-category-editor')?.classList.add('is-dragging');
+    return;
+  }
+  if (!handle) return;
+  syncMealEditorState();
+  const [menuIndex, groupIndex, dishIndex] = handle.dataset.dragDish.split(':').map(Number);
+  draggedMealDish = { menuIndex, groupIndex, dishIndex };
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', handle.dataset.dragDish);
+  handle.closest('.meal-dish-editor')?.classList.add('is-dragging');
+});
+
+document.querySelector('#mealMenuEditor')?.addEventListener('dragover', event => {
+  if (draggedMealMenu !== null) {
+    const menu = event.target.closest('.meal-tree-root');
+    if (!menu) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    clearMealDropIndicators();
+    const after = event.clientY > menu.getBoundingClientRect().top + menu.offsetHeight / 2;
+    menu.classList.add(after ? 'is-drop-after' : 'is-drop-before');
+    return;
+  }
+  if (draggedMealGroup) {
+    const group = event.target.closest('.meal-category-editor');
+    const groupList = event.target.closest('.meal-tree-groups');
+    if (!group && !groupList) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    clearMealDropIndicators();
+    if (group) {
+      const after = event.clientY > group.getBoundingClientRect().top + group.offsetHeight / 2;
+      group.classList.add(after ? 'is-drop-after' : 'is-drop-before');
+    } else groupList.classList.add('is-drop-target');
+    return;
+  }
+  if (!draggedMealDish) return;
+  const dish = event.target.closest('.meal-dish-editor');
+  const list = event.target.closest('.meal-dish-list');
+  if (!dish && !list) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  clearMealDropIndicators();
+  if (dish) {
+    const after = event.clientY > dish.getBoundingClientRect().top + dish.offsetHeight / 2;
+    dish.classList.add(after ? 'is-drop-after' : 'is-drop-before');
+  } else list.classList.add('is-drop-target');
+});
+
+document.querySelector('#mealMenuEditor')?.addEventListener('drop', event => {
+  if (draggedMealMenu !== null) {
+    const targetMenu = event.target.closest('.meal-tree-root');
+    if (!targetMenu) return;
+    event.preventDefault();
+    let targetIndex = Number(targetMenu.dataset.menuIndex) + (targetMenu.classList.contains('is-drop-after') ? 1 : 0);
+    const [movedMenu] = mealEditorTree.splice(draggedMealMenu, 1);
+    if (targetIndex > draggedMealMenu) targetIndex -= 1;
+    mealEditorTree.splice(Math.max(0, Math.min(targetIndex, mealEditorTree.length)), 0, movedMenu);
+    draggedMealMenu = null;
+    collapsedMealMenus.clear();
+    collapsedMealGroups.clear();
+    clearMealDropIndicators();
+    renderMealMenuEditor();
+    return;
+  }
+  if (draggedMealGroup) {
+    const targetGroupNode = event.target.closest('.meal-category-editor');
+    const targetGroupList = event.target.closest('.meal-tree-groups');
+    if (!targetGroupNode && !targetGroupList) return;
+    event.preventDefault();
+    const targetMenuIndex = Number((targetGroupNode?.closest('.meal-tree-root') || targetGroupList.closest('.meal-tree-root')).dataset.menuIndex);
+    const sourceGroups = mealEditorTree[draggedMealGroup.menuIndex].groups;
+    const targetGroups = mealEditorTree[targetMenuIndex].groups;
+    let targetGroupIndex = targetGroupNode ? Number(targetGroupNode.dataset.groupIndex) + (targetGroupNode.classList.contains('is-drop-after') ? 1 : 0) : targetGroups.length;
+    const [movedGroup] = sourceGroups.splice(draggedMealGroup.groupIndex, 1);
+    if (draggedMealGroup.menuIndex === targetMenuIndex && targetGroupIndex > draggedMealGroup.groupIndex) targetGroupIndex -= 1;
+    targetGroups.splice(Math.max(0, Math.min(targetGroupIndex, targetGroups.length)), 0, movedGroup);
+    draggedMealGroup = null;
+    collapsedMealGroups.clear();
+    clearMealDropIndicators();
+    renderMealMenuEditor();
+    return;
+  }
+  if (!draggedMealDish) return;
+  const dish = event.target.closest('.meal-dish-editor');
+  const list = event.target.closest('.meal-dish-list');
+  if (!dish && !list) return;
+  event.preventDefault();
+  const targetList = dish?.closest('.meal-dish-list') || list;
+  const [targetMenuIndex, targetGroupIndex] = targetList.dataset.dropGroup.split(':').map(Number);
+  const sourceGroup = mealEditorTree[draggedMealDish.menuIndex].groups[draggedMealDish.groupIndex];
+  const targetGroup = mealEditorTree[targetMenuIndex].groups[targetGroupIndex];
+  let targetDishIndex = dish ? Number(dish.dataset.dishIndex) + (dish.classList.contains('is-drop-after') ? 1 : 0) : targetGroup.dishes.length;
+  const [movedDish] = sourceGroup.dishes.splice(draggedMealDish.dishIndex, 1);
+  if (draggedMealDish.menuIndex === targetMenuIndex && draggedMealDish.groupIndex === targetGroupIndex && targetDishIndex > draggedMealDish.dishIndex) targetDishIndex -= 1;
+  targetGroup.dishes.splice(Math.max(0, Math.min(targetDishIndex, targetGroup.dishes.length)), 0, movedDish);
+  collapsedMealMenus.delete(targetMenuIndex);
+  collapsedMealGroups.delete(`${targetMenuIndex}:${targetGroupIndex}`);
+  draggedMealDish = null;
+  clearMealDropIndicators();
+  renderMealMenuEditor();
+});
+
+document.querySelector('#mealMenuEditor')?.addEventListener('dragend', () => {
+  draggedMealMenu = null;
+  draggedMealGroup = null;
+  draggedMealDish = null;
+  clearMealDropIndicators();
+  document.querySelectorAll('.meal-tree-root.is-dragging,.meal-category-editor.is-dragging,.meal-dish-editor.is-dragging').forEach(node => node.classList.remove('is-dragging'));
 });
 document.querySelector('#mealMenuForm')?.addEventListener('submit', event => {
   event.preventDefault();
   syncMealEditorState();
+  mealEditorTree.forEach(menu => menu.groups.forEach(group => { group.dishes = group.dishes.filter(dish => dish.name || dish.desc); }));
+  groundServiceState.meal.menuDetail = mealEditorTree.flatMap(menu => menu.groups.map(group => ({ category: { main: menu.name || '未命名餐单', sub: group.name || '未命名分组' }, dishes: cloneData(group.dishes) })));
   groundServiceState.meal.status = document.querySelector('#mealStatus').value;
   saveGroundServiceState();
   renderMealSummary();
