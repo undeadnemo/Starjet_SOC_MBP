@@ -5,7 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Starjet SOC 航班运行任务中心 P0 原型" />
   <title>Starjet SOC · 航班运行中心</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20260922-icons-1" />
+  <style>
+    body.mission-reference .resource-code {
+      display: grid !important;
+      place-items: center;
+      color: var(--sj-text-1) !important;
+      background: transparent !important;
+      -webkit-mask: none !important;
+      mask: none !important;
+    }
+
+    body.mission-reference .resource-code svg {
+      display: block !important;
+      width: 100% !important;
+      height: 100% !important;
+      fill: currentcolor !important;
+      stroke: none !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+
+    body.mission-reference .resource-code svg path,
+    body.mission-reference .resource-code svg circle {
+      fill: currentcolor !important;
+      stroke: none !important;
+    }
+  </style>
 </head>
 <body class="embedded mission-reference">
   <div class="app-shell">
@@ -49,7 +75,7 @@
         <button class="tab" data-tab="services">保障 <em class="tab-module-status warning" aria-label="1 项待办" title="1 项待办"><i></i>1</em></button>
         <button class="tab" data-tab="documents">文件 <em class="tab-module-status warning" aria-label="1 项待更新" title="1 项待更新"><i></i>1</em></button>
         <button class="tab" data-tab="billing">账单管理 <em class="tab-module-status warning" id="billingTabStatus" aria-label="账单待处理" title="账单待处理"><i></i><span>—</span></em></button>
-        <button class="tab" data-tab="postflight">航后日志 <em class="tab-module-status warning" id="postflightTabStatus" aria-label="航后日志待提交" title="航后日志待提交"><i></i><span>待提交</span></em></button>
+        <button class="tab" data-tab="postflight">航后日志 <em class="tab-module-status ready" id="postflightTabStatus" hidden><i></i><span></span></em></button>
       </nav>
 
       <div class="detail-primary">
@@ -83,14 +109,14 @@
             <div class="mission-section-title"><div><h2 id="missionDashboardTitle">运行资源准备</h2></div></div>
             <div class="resource-command-body">
               <svg class="readiness-connectors" viewBox="0 0 1000 300" preserveAspectRatio="none" aria-hidden="true">
-                <polyline points="344,39 375,39 429,72"></polyline>
-                <polyline points="344,112 385,112 414,118"></polyline>
-                <polyline points="344,184 385,184 414,182"></polyline>
-                <polyline points="344,257 375,257 429,228"></polyline>
-                <polyline points="656,39 625,39 571,72"></polyline>
-                <polyline points="656,112 615,112 586,118"></polyline>
-                <polyline points="656,184 615,184 586,182"></polyline>
-                <polyline points="656,257 625,257 571,228"></polyline>
+                <polyline points="344,39 375,39 500,150"></polyline>
+                <polyline points="344,112 385,112 500,150"></polyline>
+                <polyline points="344,184 385,184 500,150"></polyline>
+                <polyline points="344,257 375,257 500,150"></polyline>
+                <polyline points="656,39 625,39 500,150"></polyline>
+                <polyline points="656,112 615,112 500,150"></polyline>
+                <polyline points="656,184 615,184 500,150"></polyline>
+                <polyline points="656,257 625,257 500,150"></polyline>
               </svg>
               <div class="resource-column">
                 <button class="resource-tile is-ready" data-jump="flight" type="button"><span class="resource-code icon-aircraft" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 22v-2.5l3-2.1v-3.6L2 17v-3l8-5.6V4q0-.825.588-1.412T12 2t1.413.588T14 4v4.4l8 5.6v3l-8-3.2v3.6l3 2.1V22l-5-1.5z"/></svg></span><div><b>飞机</b><strong>100%</strong><span>G650ER · B-9308</span><em>机务检查完成 · MEL 2 项（1项到期）</em></div><i>›</i></button>
@@ -101,7 +127,7 @@
 
               <div class="readiness-core" aria-label="整体准备度 82%">
                 <canvas id="missionReadinessCanvas" aria-hidden="true"></canvas>
-                <div><strong>82<small>%</small></strong><b>准备完成</b><p><span><strong>6</strong><small>已就绪</small></span><span><strong>2</strong><small>待处理</small></span></p></div>
+                <div><strong>82<small>%</small></strong><b>准备完成</b></div>
               </div>
 
               <div class="resource-column">
@@ -118,7 +144,6 @@
               <div class="mission-dynamic-head"><b>航班动态</b><em>待起飞</em><button type="button">查看完整日志 →</button></div>
               <span>起飞倒计时</span>
               <strong>04:10:32</strong>
-              <time id="countdownTime">21 AUG 2026 13:30 LT</time>
             </div>
             <ol class="flight-phase-list" tabindex="0" aria-label="航班动态节点，可滚动查看">
               <li class="is-complete"><span class="phase-node"></span><time>09:15</time><div><b>准备签发</b><small>运行计划已批准 <span class="phase-source">FPL</span></small></div><em>完成</em></li>
