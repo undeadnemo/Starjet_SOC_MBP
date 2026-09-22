@@ -415,15 +415,21 @@ function renderMissionReadiness() {
     blocked: tokens.getPropertyValue('--sj-red').trim() || '#ff665c',
     empty: tokens.getPropertyValue('--sj-surface-3').trim() || '#151b26',
     inner: tokens.getPropertyValue('--sj-border').trim() || '#252d3d',
+    surface: tokens.getPropertyValue('--sj-surface-1').trim() || '#0b0e14',
   };
   const center = size / 2;
   const radius = size * .405;
+  const ringWidth = Math.max(13, size * .065);
+  context.beginPath();
+  context.arc(center, center, radius - ringWidth / 2, 0, Math.PI * 2);
+  context.fillStyle = colors.surface;
+  context.fill();
   context.beginPath();
   context.arc(center, center, size * .475, 0, Math.PI * 2);
   context.lineWidth = 1;
   context.strokeStyle = colors.inner;
   context.stroke();
-  context.lineWidth = Math.max(13, size * .065);
+  context.lineWidth = ringWidth;
   context.lineCap = 'butt';
   context.beginPath();
   context.arc(center, center, radius, -Math.PI / 2, Math.PI * 1.5);
@@ -479,7 +485,6 @@ function renderLeg(index) {
   const [depField, arrField, basisLabel] = timeFields[timeBasis];
   document.querySelector('#depTime').innerHTML = `<span>${leg.depDate} 2026</span><b>${leg[depField]} <small>${basisLabel}</small></b>`;
   document.querySelector('#arrTime').innerHTML = `<span>${leg.arrDate} 2026</span><b>${leg[arrField]} <small>${basisLabel}</small></b>`;
-  document.querySelector('#countdownTime').textContent = `${leg.depDate} 2026 ${leg[depField]} ${basisLabel}`;
   renderMovement(leg, depField, arrField, basisLabel);
   updateMissionPhase(leg.movementState);
   document.querySelector('#crumbLeg').textContent = `航班 ${index + 1}`;
@@ -1300,10 +1305,18 @@ function renderPostflightLogs() {
   }).join('') : '<div class="postflight-log-empty"><b>暂无航后日志</b><span>点击“新增”填写服务评价和航班执行记录</span></div>';
   const tabStatus = document.querySelector('#postflightTabStatus');
   if (tabStatus) {
-    tabStatus.className = `tab-module-status ${postflightLogs.length ? 'ready' : 'warning'}`;
-    tabStatus.setAttribute('aria-label', postflightLogs.length ? `${postflightLogs.length} 条航后日志` : '航后日志待填写');
-    tabStatus.title = postflightLogs.length ? `${postflightLogs.length} 条航后日志` : '航后日志待填写';
-    tabStatus.querySelector('span').textContent = postflightLogs.length ? `${postflightLogs.length}条` : '待填写';
+    tabStatus.hidden = postflightLogs.length === 0;
+    if (postflightLogs.length) {
+      const statusLabel = `${postflightLogs.length} 条航后日志`;
+      tabStatus.className = 'tab-module-status ready';
+      tabStatus.setAttribute('aria-label', statusLabel);
+      tabStatus.title = statusLabel;
+      tabStatus.querySelector('span').textContent = `${postflightLogs.length}条`;
+    } else {
+      tabStatus.removeAttribute('aria-label');
+      tabStatus.removeAttribute('title');
+      tabStatus.querySelector('span').textContent = '';
+    }
   }
 }
 

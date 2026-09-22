@@ -153,6 +153,8 @@ dialog{color:#edf2f7;background:#0d121b}.dialog-head{border-bottom-color:var(--l
   white-space: nowrap;
 }
 
+.tab-module-status[hidden] { display: none; }
+
 .tab-module-status i {
   width: 6px;
   height: 6px;
@@ -6378,4 +6380,27 @@ body.mission-reference .mission-dashboard {
     grid-template-rows: auto auto auto;
     grid-template-areas: "route" "dynamic" "resources";
   }
+}
+
+/* Final icon rendering layer: file previews must not fall back to external masks. */
+body.mission-reference .resource-code {
+  display: grid;
+  place-items: center;
+  color: var(--sj-text-1);
+  background: transparent;
+  -webkit-mask: none;
+  mask: none;
+}
+
+body.mission-reference .resource-code svg {
+  display: block;
+  fill: currentcolor;
+  stroke: none;
+  visibility: visible;
+}
+
+body.mission-reference .resource-code svg path,
+body.mission-reference .resource-code svg circle {
+  fill: currentcolor;
+  stroke: none;
 }

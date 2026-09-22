@@ -120,6 +120,7 @@ const timeBase = ref<TimeBase>('BJ');
 const timezone = ref('UTC+08:00 China/Shanghai');
 const indicatorMode = ref<IndicatorMode>('lights');
 const hoveredFlight = ref<FlightPlanItem>();
+const flightPopoverRef = ref<HTMLElement>();
 const flightPopoverPosition = ref({ left: 0, top: 0 });
 const timelineScrollRef = ref<HTMLElement>();
 const ganttScrollRef = ref<HTMLElement>();
@@ -135,6 +136,15 @@ const draggedTodoId = ref<string>();
 const dragOverTodoId = ref<string>();
 const todoOrderAnnouncement = ref('');
 let todoSequence = 20;
+let flightPopoverHideTimer: ReturnType<typeof setTimeout> | undefined;
+
+const flightPhaseMeta: Record<FlightPhase, { label: string; tone: string }> = {
+  aog: { label: 'AOG 受阻', tone: 'red' },
+  arrived: { label: '已到达', tone: 'blue' },
+  confirmed: { label: '已确认', tone: 'lime' },
+  maintenance: { label: '机务保障', tone: 'purple' },
+  preparing: { label: '准备中', tone: 'amber' },
+};
 
 const airportInfo: Record<string, AirportInfo> = {
   EGSS: { city: '伦敦', iata: 'STN', name: '伦敦斯坦斯特德机场', timezone: 'UTC+01:00' },
@@ -579,18 +589,98 @@ function getFlightDisplayDate(flight: FlightPlanItem) {
   return getFlightDepartureDateTime(flight).format('YYYY-MM-DD');
 }
 
-function showFlightPopover(flight: FlightPlanItem, event: MouseEvent | FocusEvent) {
-  const target = event.currentTarget as HTMLElement | null;
-  const rect = target?.getBoundingClientRect();
-  hoveredFlight.value = flight;
-  flightPopoverPosition.value = {
-    left: Math.min(window.innerWidth - 336, Math.max(16, rect ? rect.right + 10 : 16)),
-    top: Math.min(window.innerHeight - 230, Math.max(16, rect ? rect.top : 16)),
+function cancelFlightPopoverHide() {
+  if (!flightPopoverHideTimer) return;
+  clearTimeout(flightPopoverHideTimer);
+  flightPopoverHideTimer = undefined;
+}
+
+function resolveFlightPopoverPosition(
+  rect: DOMRect,
+  width = 392,
+  height = 420,
+) {
+  const viewportMargin = 12;
+  const anchorGap = 8;
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+  const preferredLeft = rect.right + anchorGap;
+  const fallbackLeft = rect.left - width - anchorGap;
+  const maxLeft = viewportWidth - width - viewportMargin;
+  const left = preferredLeft + width <= viewportWidth - viewportMargin
+    ? preferredLeft
+    : fallbackLeft >= viewportMargin
+      ? fallbackLeft
+      : Math.min(maxLeft, Math.max(viewportMargin, preferredLeft));
+  const top = Math.min(
+    viewportHeight - height - viewportMargin,
+    Math.max(viewportMargin, rect.top),
+  );
+  return {
+    left: Math.max(viewportMargin, left),
+    top: Math.max(viewportMargin, top),
   };
 }
 
-function hideFlightPopover() {
-  hoveredFlight.value = undefined;
+async function refineFlightPopoverPosition(rect: DOMRect) {
+  await nextTick();
+  const popover = flightPopoverRef.value;
+  if (!popover) return;
+  flightPopoverPosition.value = resolveFlightPopoverPosition(
+    rect,
+    popover.offsetWidth,
+    popover.offsetHeight,
+  );
+}
+
+function showFlightPopover(flight: FlightPlanItem, event: MouseEvent | FocusEvent) {
+  cancelFlightPopoverHide();
+  const target = event.currentTarget as HTMLElement | null;
+  const rect = target?.getBoundingClientRect();
+  if (rect) {
+    flightPopoverPosition.value = resolveFlightPopoverPosition(rect);
+  }
+  hoveredFlight.value = flight;
+  if (rect) void refineFlightPopoverPosition(rect);
+}
+
+function keepFlightPopoverOpen() {
+  cancelFlightPopoverHide();
+}
+
+function hideFlightPopover(immediate = false) {
+  cancelFlightPopoverHide();
+  if (immediate) {
+    hoveredFlight.value = undefined;
+    return;
+  }
+  flightPopoverHideTimer = setTimeout(() => {
+    hoveredFlight.value = undefined;
+    flightPopoverHideTimer = undefined;
+  }, 180);
+}
+
+function openFlightFromPopover(flight: FlightPlanItem) {
+  hideFlightPopover(true);
+  openFlight(flight);
+}
+
+function goToFlightDetailFromPopover(flight: FlightPlanItem) {
+  hideFlightPopover(true);
+  goToFlightDetail(flight);
+}
+
+function getFlightPhaseMeta(flight: FlightPlanItem) {
+  return flightPhaseMeta[flight.phase];
+}
+
+function getTodoSummary(flight: FlightPlanItem) {
+  const todos = todosForFlight(flight);
+  return {
+    blocked: todos.filter((todo) => todo.status === 'blocked').length,
+    completed: todos.filter((todo) => todo.status === 'completed').length,
+    pending: todos.filter((todo) => todo.status === 'pending').length,
+  };
 }
 
 function flightDuration(flight: FlightPlanItem) {
@@ -976,6 +1066,7 @@ async function setupTimelineResizeObserver() {
 }
 
 watch(viewMode, () => {
+  hideFlightPopover(true);
   void setupTimelineResizeObserver();
 });
 
@@ -990,6 +1081,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   timelineResizeObserver?.disconnect();
   if (currentTimeTimer) clearInterval(currentTimeTimer);
+  cancelFlightPopoverHide();
 });
 </script>
 
@@ -1119,9 +1211,9 @@ onBeforeUnmount(() => {
                 :aria-label="`${flight.type} ${flight.aircraft}，${flight.from} ${formatFlightTime(flight.std, flight)} 至 ${flight.to} ${formatFlightTime(flight.sta, flight, 'arrival')}，${todosForFlight(flight).length} 项待办`"
                 @click="openFlight(flight)"
                 @mouseenter="showFlightPopover(flight, $event)"
-                @mouseleave="hideFlightPopover"
+                @mouseleave="hideFlightPopover()"
                 @focus="showFlightPopover(flight, $event)"
-                @blur="hideFlightPopover"
+                @blur="hideFlightPopover()"
                 >
                 <span class="flight-main">
                   <span class="flight-card-head">
@@ -1208,9 +1300,9 @@ onBeforeUnmount(() => {
                     type="button"
                     @click="openFlight(flight)"
                     @mouseenter="showFlightPopover(flight, $event)"
-                    @mouseleave="hideFlightPopover"
+                    @mouseleave="hideFlightPopover()"
                     @focus="showFlightPopover(flight, $event)"
-                    @blur="hideFlightPopover"
+                    @blur="hideFlightPopover()"
                   >
                     <span class="gantt-bar-head">
                       <span class="gantt-flight-identity">
@@ -1251,7 +1343,7 @@ onBeforeUnmount(() => {
       <div class="calendar-grid">
         <article v-for="day in days" :key="day.key" class="calendar-day">
           <header><strong>{{ day.label }}</strong><span>{{ day.weekday }}</span></header>
-          <button v-for="flight in flightsForDay(day.key)" :key="flight.id" class="calendar-flight" :style="getAircraftStyle(flight.aircraft)" @click="openFlight(flight)" @mouseenter="showFlightPopover(flight, $event)" @mouseleave="hideFlightPopover" @focus="showFlightPopover(flight, $event)" @blur="hideFlightPopover">
+          <button v-for="flight in flightsForDay(day.key)" :key="flight.id" class="calendar-flight" :style="getAircraftStyle(flight.aircraft)" @click="openFlight(flight)" @mouseenter="showFlightPopover(flight, $event)" @mouseleave="hideFlightPopover()" @focus="showFlightPopover(flight, $event)" @blur="hideFlightPopover()">
             <span class="aircraft-color-label">{{ flight.aircraft }}</span>
             <span>{{ flight.from }} → {{ flight.to }}</span>
           </button>
@@ -1271,11 +1363,71 @@ onBeforeUnmount(() => {
     </section>
 
     <Teleport to="body">
-      <aside v-if="hoveredFlight" class="flight-hover-popover sj-mission-control" :style="flightPopoverPosition" aria-live="polite">
-        <header><span>{{ hoveredFlight.type }}</span><strong>{{ hoveredFlight.flightNo }}</strong><b>{{ hoveredFlight.aircraft }}</b></header>
-        <div class="hover-route"><strong>{{ hoveredFlight.from }}</strong><i>→</i><strong>{{ hoveredFlight.to }}</strong></div>
-        <p>{{ getFlightDisplayDate(hoveredFlight) }} · {{ formatFlightTime(hoveredFlight.std, hoveredFlight) }}–{{ formatFlightTime(hoveredFlight.sta, hoveredFlight, 'arrival') }} · {{ flightDuration(hoveredFlight) }}</p>
-        <ul><li v-for="todo in todosForFlight(hoveredFlight).slice(0, 3)" :key="todo.id"><b :class="`status-${getTodoStatus(todo.status).color}`">{{ todoStatusSymbol(todo.status) }}</b><span>{{ cleanTodoContent(todo.content) }}</span></li></ul>
+      <aside
+        v-if="hoveredFlight"
+        ref="flightPopoverRef"
+        class="flight-hover-popover sj-mission-control"
+        :style="[
+          {
+            left: `${flightPopoverPosition.left}px`,
+            top: `${flightPopoverPosition.top}px`,
+          },
+          getAircraftStyle(hoveredFlight.aircraft),
+        ]"
+        aria-label="航段详细信息"
+        @mouseenter="keepFlightPopoverOpen"
+        @mouseleave="hideFlightPopover()"
+        @focusin="keepFlightPopoverOpen"
+        @focusout="hideFlightPopover()"
+      >
+        <header class="hover-popover-header">
+          <span class="flight-type-tag"><component :is="flightTypeIcons[hoveredFlight.type]" aria-hidden="true" />{{ hoveredFlight.type }}</span>
+          <strong>{{ hoveredFlight.flightNo }}</strong>
+          <b class="aircraft-color-label">{{ hoveredFlight.aircraft }}</b>
+          <em :class="`status-${getFlightPhaseMeta(hoveredFlight).tone}`">{{ getFlightPhaseMeta(hoveredFlight).label }}</em>
+        </header>
+        <div class="hover-route">
+          <span>
+            <strong>{{ hoveredFlight.from }}</strong>
+            <small>{{ getAirportInfo(hoveredFlight.from).city }} · {{ getAirportInfo(hoveredFlight.from).iata }}</small>
+          </span>
+          <i>→</i>
+          <span>
+            <strong>{{ hoveredFlight.to }}</strong>
+            <small>{{ getAirportInfo(hoveredFlight.to).city }} · {{ getAirportInfo(hoveredFlight.to).iata }}</small>
+          </span>
+        </div>
+        <div class="hover-flight-facts">
+          <span><small>计划日期</small><b>{{ getFlightDisplayDate(hoveredFlight) }}</b></span>
+          <span><small>计划起飞</small><b>{{ formatFlightTime(hoveredFlight.std, hoveredFlight) }}</b></span>
+          <span><small>计划到达</small><b>{{ formatFlightTime(hoveredFlight.sta, hoveredFlight, 'arrival') }}</b></span>
+          <span><small>计划时长</small><b>{{ flightDuration(hoveredFlight) }}</b></span>
+        </div>
+        <dl class="hover-resource-list">
+          <div><dt>许可与保障</dt><dd>{{ hoveredFlight.permit }}</dd></div>
+          <div><dt>燃油</dt><dd>{{ hoveredFlight.fuel }}</dd></div>
+        </dl>
+        <section class="hover-todo-section">
+          <header>
+            <strong>待办事项</strong>
+            <span>
+              <i class="status-lime">{{ getTodoSummary(hoveredFlight).completed }} 完成</i>
+              <i class="status-amber">{{ getTodoSummary(hoveredFlight).pending }} 待处理</i>
+              <i class="status-red">{{ getTodoSummary(hoveredFlight).blocked }} 阻碍</i>
+            </span>
+          </header>
+          <ul>
+            <li v-for="todo in todosForFlight(hoveredFlight)" :key="todo.id">
+              <b :class="`status-${getTodoStatus(todo.status).color}`">{{ todoStatusSymbol(todo.status) }}</b>
+              <span>{{ cleanTodoContent(todo.content) }}</span>
+              <small>{{ getTodoStatus(todo.status).label }}</small>
+            </li>
+          </ul>
+        </section>
+        <footer class="hover-popover-actions">
+          <button type="button" @click="openFlightFromPopover(hoveredFlight)">查看简介</button>
+          <button type="button" class="primary" @click="goToFlightDetailFromPopover(hoveredFlight)">进入详情</button>
+        </footer>
       </aside>
     </Teleport>
 
@@ -1537,6 +1689,7 @@ onBeforeUnmount(() => {
 .status-blue { color: var(--sj-blue); }
 .status-amber { color: var(--sj-amber); }
 .status-red { color: var(--sj-red); }
+.status-purple { color: var(--sj-purple); }
 .flight-card-todos { align-self: start; align-content: start; text-align: right; }
 .flight-card-todos > span { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 14px; align-items: center; gap: var(--sj-space-1); }
 .flight-card-todos i { max-width: 15em; overflow: hidden; color: #202833; font-size: 10px; font-style: normal; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
@@ -1803,18 +1956,57 @@ onBeforeUnmount(() => {
   .sj-mission-control.is-dark .timeline-body { --timeline-base-height: 610px; }
 }
 
-.flight-hover-popover { position: fixed; z-index: 5000; width: 320px; padding: var(--sj-space-4); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-overlay); color: var(--sj-text-1); background: var(--sj-surface-4); box-shadow: var(--sj-shadow-panel); pointer-events: none; }
-.flight-hover-popover header { display: flex; align-items: center; gap: 8px; }
-.flight-hover-popover header span { padding: 3px 6px; border: 1px solid var(--sj-border); border-radius: var(--sj-radius-tag); color: var(--sj-blue); font: 700 10px var(--sj-font-data); }
-.flight-hover-popover header strong { font-size: 15px; }
-.flight-hover-popover header b { margin-left: auto; color: var(--sj-teal); font: 700 13px var(--sj-font-data); }
-.hover-route { display: flex; align-items: center; justify-content: space-between; margin: var(--sj-space-4) 0 6px; font: 800 25px var(--sj-font-data); }
-.hover-route i { color: var(--sj-text-3); font-style: normal; }
-.flight-hover-popover p { color: var(--sj-text-2); font: 11px var(--sj-font-data); }
-.flight-hover-popover ul { display: grid; gap: 7px; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--sj-border); list-style: none; }
-.flight-hover-popover li { display: flex; align-items: center; gap: var(--sj-space-2); color: var(--sj-text-2); font-size: 12px; }
-.flight-hover-popover li b { display: grid; width: 15px; height: 15px; place-items: center; border-radius: 50%; color: var(--sj-canvas); font-size: 10px; }
-.flight-hover-popover li b.status-lime { background: var(--sj-lime); }.flight-hover-popover li b.status-amber { background: var(--sj-amber); }.flight-hover-popover li b.status-red { background: var(--sj-red); }
+.flight-hover-popover {
+  position: fixed;
+  z-index: 5000;
+  width: min(392px, calc(100vw - var(--sj-space-6)));
+  max-height: calc(100vh - var(--sj-space-6));
+  padding: var(--sj-space-4);
+  overflow: auto;
+  border: 1px solid var(--sj-border-strong);
+  border-radius: var(--sj-radius-overlay);
+  color: var(--sj-text-1);
+  background: var(--sj-surface-4);
+  box-shadow: var(--sj-shadow-panel);
+  pointer-events: auto;
+  overscroll-behavior: contain;
+}
+.hover-popover-header { display: flex; min-width: 0; align-items: center; gap: var(--sj-space-2); }
+.hover-popover-header .flight-type-tag { flex: 0 0 auto; color: var(--sj-blue); }
+.hover-popover-header > strong { overflow: hidden; font: 750 14px var(--sj-font-data); text-overflow: ellipsis; white-space: nowrap; }
+.hover-popover-header > .aircraft-color-label { flex: 0 0 auto; margin-left: auto; color: var(--aircraft-color); font: 750 12px var(--sj-font-data); }
+.hover-popover-header > em { flex: 0 0 auto; padding: 2px var(--sj-space-1); border: 1px solid currentcolor; border-radius: var(--sj-radius-tag); background: color-mix(in srgb, currentcolor 12%, transparent); font-size: 9px; font-style: normal; font-weight: 700; }
+.hover-route { display: grid; margin: var(--sj-space-4) 0; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sj-space-3); }
+.hover-route > span { display: grid; min-width: 0; gap: 2px; }
+.hover-route > span:last-child { justify-items: end; text-align: right; }
+.hover-route strong { font: 800 25px var(--sj-font-data); letter-spacing: .02em; }
+.hover-route small { overflow: hidden; color: var(--sj-text-3); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.hover-route > i { color: var(--sj-text-3); font-style: normal; }
+.hover-flight-facts { display: grid; padding: var(--sj-space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sj-space-3); border: 1px solid var(--sj-border); background: var(--sj-surface-2); }
+.hover-flight-facts > span { display: grid; gap: 2px; }
+.hover-flight-facts small { color: var(--sj-text-3); font-size: 9px; }
+.hover-flight-facts b { color: var(--sj-text-1); font: 700 11px var(--sj-font-data); }
+.hover-resource-list { display: grid; margin: var(--sj-space-3) 0 0; gap: 0; }
+.hover-resource-list > div { display: grid; min-height: 34px; padding-block: var(--sj-space-2); grid-template-columns: 88px minmax(0, 1fr); align-items: start; gap: var(--sj-space-2); border-bottom: 1px solid var(--sj-border); }
+.hover-resource-list dt { color: var(--sj-text-3); font-size: 10px; }
+.hover-resource-list dd { margin: 0; color: var(--sj-text-2); font-size: 11px; line-height: 1.5; }
+.hover-todo-section { margin-top: var(--sj-space-3); }
+.hover-todo-section > header { display: flex; align-items: center; justify-content: space-between; gap: var(--sj-space-3); }
+.hover-todo-section > header > strong { font-size: 12px; }
+.hover-todo-section > header > span { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sj-space-2); }
+.hover-todo-section > header i { font-size: 9px; font-style: normal; }
+.hover-todo-section ul { display: grid; margin: var(--sj-space-2) 0 0; padding: 0; gap: 1px; background: var(--sj-border); list-style: none; }
+.hover-todo-section li { display: grid; min-height: 34px; padding: var(--sj-space-2); grid-template-columns: 15px minmax(0, 1fr) auto; align-items: center; gap: var(--sj-space-2); color: var(--sj-text-2); background: var(--sj-surface-2); font-size: 11px; }
+.hover-todo-section li > b { display: grid; width: 15px; height: 15px; place-items: center; border-radius: 50%; color: var(--sj-canvas); font-size: 10px; }
+.hover-todo-section li > b.status-lime { background: var(--sj-lime); }
+.hover-todo-section li > b.status-amber { background: var(--sj-amber); }
+.hover-todo-section li > b.status-red { background: var(--sj-red); }
+.hover-todo-section li > small { color: var(--sj-text-3); font-size: 9px; white-space: nowrap; }
+.hover-popover-actions { display: grid; margin-top: var(--sj-space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sj-space-2); }
+.hover-popover-actions button { min-height: var(--sj-control-dense); padding-inline: var(--sj-space-3); border: 1px solid var(--sj-border-strong); border-radius: var(--sj-radius-control); color: var(--sj-text-1); background: var(--sj-surface-2); font-size: 11px; font-weight: 700; cursor: pointer; }
+.hover-popover-actions button:hover, .hover-popover-actions button:focus-visible { border-color: var(--sj-blue); outline: 2px solid var(--sj-blue-soft); outline-offset: 1px; background: var(--sj-surface-3); }
+.hover-popover-actions button.primary { border-color: var(--sj-lime); color: var(--sj-canvas); background: var(--sj-lime); }
+.hover-popover-actions button.primary:hover, .hover-popover-actions button.primary:focus-visible { border-color: var(--sj-lime); background: var(--sj-lime); }
 </style>
 
 <style>
