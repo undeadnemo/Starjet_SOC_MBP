@@ -284,23 +284,21 @@
           </section>
 
           <section class="tab-panel" id="services">
-            <div class="section-heading service-section-heading"><div><h2>地面保障</h2><p>保障资源、接送机地点、行程保障人与餐单统一配置</p></div><button class="primary-btn" id="saveGroundService" type="button">保存保障配置</button></div>
+            <div class="section-heading service-section-heading"><div><h2>地面保障</h2><p>接送机地点、行程保障人与餐单统一配置</p></div><button class="primary-btn" id="saveGroundService" type="button">保存保障配置</button></div>
             <div class="service-summary" aria-label="地面保障状态汇总">
-              <div><span>保障事项</span><strong>8</strong><small>起飞站 / 到达站</small></div>
-              <div><span>已确认</span><strong class="is-ready">6</strong><small>资源已锁定</small></div>
-              <div><span>待处理</span><strong class="is-warning">2</strong><small>餐单 / 到达交通</small></div>
+              <div><span>保障站点</span><strong>2</strong><small>起飞站 / 到达站</small></div>
+              <div><span>接送机地点</span><strong class="is-ready" id="serviceLocationCount">2</strong><small>已配置地点</small></div>
+              <div><span>行程保障人</span><strong class="is-ready" id="serviceGuarantorCount">2</strong><small>本航段保障人员</small></div>
               <div><span>餐单菜品</span><strong id="mealDishCount">27</strong><small>3 组餐食方案</small></div>
             </div>
             <div class="service-workbench">
               <article class="card service-station-card" data-service-station="dep">
-                <header class="service-station-head"><div><span class="station-direction">DEP · 起飞站</span><h3><b id="serviceDepartureAirport">ZSPD</b><span id="serviceDepartureName">上海浦东</span></h3></div><span class="service-station-state is-warning"><i></i>1 项待处理</span></header>
-                <div class="service-block"><div class="service-block-title"><h4>基础保障</h4><button type="button" data-edit-service="dep">编辑</button></div><div class="service-checklist"><div><span>地面代理</span><b>上海机场尚捷</b><em class="is-ready">已确认</em></div><div><span>停机位</span><b>公务机坪 609</b><em class="is-ready">已确认</em></div><div><span>GPU</span><b>已预订</b><em class="is-ready">已确认</em></div><div><span>餐食交付</span><b>11:10 LT</b><em class="is-warning">部分确认</em></div></div></div>
+                <header class="service-station-head"><div><span class="station-direction">DEP · 起飞站</span><h3><b id="serviceDepartureAirport">ZSPD</b><span id="serviceDepartureName">上海浦东</span></h3></div></header>
                 <div class="service-block service-location-block"><div class="service-block-title"><h4>接机 / 送机地点</h4><span class="service-type-chip">FBO</span></div><div class="service-location" id="serviceLocationDep"></div></div>
                 <div class="service-block"><div class="service-block-title"><h4>行程保障人</h4><button type="button" data-add-guarantor="dep">+ 添加</button></div><div class="guarantor-list" id="serviceGuarantorDep"></div></div>
               </article>
               <article class="card service-station-card" data-service-station="arr">
-                <header class="service-station-head"><div><span class="station-direction">ARR · 到达站</span><h3><b id="serviceArrivalAirport">UACC</b><span id="serviceArrivalName">阿斯塔纳</span></h3></div><span class="service-station-state is-warning"><i></i>1 项待处理</span></header>
-                <div class="service-block"><div class="service-block-title"><h4>基础保障</h4><button type="button" data-edit-service="arr">编辑</button></div><div class="service-checklist"><div><span>地面代理</span><b>Astana Aviation</b><em class="is-ready">已确认</em></div><div><span>停机位</span><b>Business Apron</b><em class="is-ready">已确认</em></div><div><span>CIQ</span><b>公务机通道</b><em class="is-ready">已确认</em></div><div><span>旅客交通</span><b>待供应商回复</b><em class="is-warning">待确认</em></div></div></div>
+                <header class="service-station-head"><div><span class="station-direction">ARR · 到达站</span><h3><b id="serviceArrivalAirport">UACC</b><span id="serviceArrivalName">阿斯塔纳</span></h3></div></header>
                 <div class="service-block service-location-block"><div class="service-block-title"><h4>接机 / 送机地点</h4><span class="service-type-chip">FBO</span></div><div class="service-location" id="serviceLocationArr"></div></div>
                 <div class="service-block"><div class="service-block-title"><h4>行程保障人</h4><button type="button" data-add-guarantor="arr">+ 添加</button></div><div class="guarantor-list" id="serviceGuarantorArr"></div></div>
               </article>
@@ -515,14 +513,6 @@
   <dialog id="groundServiceDialog" aria-labelledby="groundServiceDialogTitle">
     <form id="groundServiceForm">
       <header class="dialog-head"><div><span id="groundServiceDialogStation">起飞站</span><h3 id="groundServiceDialogTitle">保障信息配置</h3></div><button id="closeGroundService" type="button" aria-label="关闭">×</button></header>
-      <div class="ground-service-form-grid">
-        <label>地面代理<input id="serviceHandlerInput" required /></label>
-        <label>停机位 / 保障区域<input id="serviceStandInput" required /></label>
-        <label>第三项保障名称<input id="serviceExtraNameInput" required /></label>
-        <label>第三项保障内容<input id="serviceExtraValueInput" required /></label>
-        <label>待确认事项<input id="servicePendingNameInput" required /></label>
-        <label>待确认内容<input id="servicePendingValueInput" required /></label>
-      </div>
       <fieldset class="ground-service-fieldset"><legend>接机 / 送机地点</legend><div class="ground-service-form-grid">
         <label class="wide">地点名称<input id="serviceLocationNameInput" required /></label>
         <label class="wide">地址<input id="serviceLocationAddressInput" required /></label>
@@ -540,7 +530,7 @@
   <dialog id="mealMenuDialog" aria-labelledby="mealMenuDialogTitle">
     <form id="mealMenuForm">
       <header class="dialog-head"><div><span>共 <b id="mealDialogCount">27</b> 道菜</span><h3 id="mealMenuDialogTitle">餐单明细配置</h3></div><button id="closeMealMenu" type="button" aria-label="关闭">×</button></header>
-      <div class="meal-dialog-toolbar"><p>按餐食方案与分类维护中英文菜名，修改后保存到当前航班。</p><button id="addMealCategory" type="button">+ 新增分类</button></div>
+      <div class="meal-dialog-toolbar"><p>按“餐单 — 分组 — 菜品”维护内容，三级均可展开折叠并拖动排序。</p><button id="addMealMenu" type="button">+ 新增餐单</button></div>
       <div class="meal-menu-editor" id="mealMenuEditor"></div>
       <div class="dialog-actions"><button id="cancelMealMenu" type="button">取消</button><button class="primary-btn" type="submit">保存餐单</button></div>
     </form>
