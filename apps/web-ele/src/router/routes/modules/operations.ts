@@ -55,6 +55,17 @@ const routes: RouteRecordRaw[] = [
         path: '/operations/crew-roster',
       },
       {
+        alias: '/crew/crew-info',
+        component: () =>
+          import('#/views/crew-management/crew-info/index.vue'),
+        meta: {
+          icon: 'lucide:id-card',
+          title: '机组信息',
+        },
+        name: 'CrewInformation',
+        path: '/operations/crew-info',
+      },
+      {
         name: 'FlightRelease',
         path: '/operations/flight-release',
         component: () =>
@@ -84,6 +95,28 @@ const routes: RouteRecordRaw[] = [
         },
         name: 'FlightBillPreManagement',
         path: '/operations/flight-bill-pre-management',
+      },
+      {
+        alias: '/finance/overseas-allowance',
+        component: () =>
+          import('#/views/finance/overseas-allowance-management/index.vue'),
+        meta: {
+          icon: 'lucide:wallet-cards',
+          title: '驻外补贴管理',
+        },
+        name: 'OverseasAllowanceManagement',
+        path: '/operations/overseas-allowance',
+      },
+      {
+        alias: '/finance/overseas-allowance-rules',
+        component: () =>
+          import('#/views/finance/overseas-allowance-rule/index.vue'),
+        meta: {
+          icon: 'lucide:settings-2',
+          title: '驻外补贴规则',
+        },
+        name: 'OverseasAllowanceRule',
+        path: '/operations/overseas-allowance-rules',
       },
     ],
   },

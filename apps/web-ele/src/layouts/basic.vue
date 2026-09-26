@@ -115,6 +115,11 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
           path: `${prefix}/crew-roster`,
         },
         {
+          icon: 'lucide:id-card',
+          name: '机组信息',
+          path: `${prefix}/crew-info`,
+        },
+        {
           icon: 'lucide:badge-check',
           name: '飞行放行',
           path: `${prefix}/flight-release`,
@@ -129,22 +134,20 @@ function createPreviewMenus(prefix: '/demo' | '/preview'): MenuRecordRaw[] {
           name: '航班账单预管理',
           path: `${prefix}/flight-bill-pre-management`,
         },
+        {
+          icon: 'lucide:wallet-cards',
+          name: '驻外补贴管理',
+          path: `${prefix}/overseas-allowance`,
+        },
+        {
+          icon: 'lucide:settings-2',
+          name: '驻外补贴规则',
+          path: `${prefix}/overseas-allowance-rules`,
+        },
       ],
       icon: 'lucide:plane',
       name: '航班管理',
       path: `${prefix}/operations`,
-    },
-    {
-      children: [
-        {
-          icon: 'lucide:id-card',
-          name: '机组信息',
-          path: `${prefix}/crew-info`,
-        },
-      ],
-      icon: 'lucide:contact-round',
-      name: '信息管理',
-      path: `${prefix}/crew`,
     },
     {
       children: [

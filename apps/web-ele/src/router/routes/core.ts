@@ -154,6 +154,32 @@ const publicDemoRoutes: RouteRecordRaw[] = isPublicDemo
         },
       },
       {
+        name: 'OverseasAllowanceManagementDemo',
+        path: '/demo/overseas-allowance',
+        component: () =>
+          import('#/views/finance/overseas-allowance-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '驻外补贴管理 Demo',
+        },
+      },
+      {
+        name: 'OverseasAllowanceRuleDemo',
+        path: '/demo/overseas-allowance-rules',
+        component: () =>
+          import('#/views/finance/overseas-allowance-rule/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '驻外补贴规则 Demo',
+        },
+      },
+      {
         name: 'FlightBillPreManagementDemo',
         path: '/demo/flight-bill-pre-management',
         component: () =>
@@ -342,6 +368,32 @@ const developmentPreviewRoutes: RouteRecordRaw[] = isDevelopmentPreview
           hideInTab: true,
           ignoreAccess: true,
           title: '付款申请预览',
+        },
+      },
+      {
+        name: 'OverseasAllowanceManagementPreview',
+        path: '/preview/overseas-allowance',
+        component: () =>
+          import('#/views/finance/overseas-allowance-management/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '驻外补贴管理预览',
+        },
+      },
+      {
+        name: 'OverseasAllowanceRulePreview',
+        path: '/preview/overseas-allowance-rules',
+        component: () =>
+          import('#/views/finance/overseas-allowance-rule/index.vue'),
+        meta: {
+          hideInBreadcrumb: true,
+          hideInMenu: true,
+          hideInTab: true,
+          ignoreAccess: true,
+          title: '驻外补贴规则预览',
         },
       },
       {

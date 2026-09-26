@@ -660,11 +660,6 @@ function hideFlightPopover(immediate = false) {
   }, 180);
 }
 
-function openFlightFromPopover(flight: FlightPlanItem) {
-  hideFlightPopover(true);
-  openFlight(flight);
-}
-
 function goToFlightDetailFromPopover(flight: FlightPlanItem) {
   hideFlightPopover(true);
   goToFlightDetail(flight);
@@ -846,10 +841,8 @@ async function goToday() {
 }
 
 function openFlight(flight: FlightPlanItem) {
-  ensureFlightTodos(flight);
-  selectedFlight.value = flight;
-  newTodo.content = '';
-  inspectorVisible.value = true;
+  hideFlightPopover(true);
+  goToFlightDetail(flight);
 }
 
 function goToFlightDetail(flight: FlightPlanItem) {
@@ -1425,7 +1418,6 @@ onBeforeUnmount(() => {
           </ul>
         </section>
         <footer class="hover-popover-actions">
-          <button type="button" @click="openFlightFromPopover(hoveredFlight)">查看简介</button>
           <button type="button" class="primary" @click="goToFlightDetailFromPopover(hoveredFlight)">进入详情</button>
         </footer>
       </aside>

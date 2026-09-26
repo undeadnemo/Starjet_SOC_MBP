@@ -4926,6 +4926,7 @@ body.mission-reference .resource-code svg circle {
   fill: currentcolor;
   stroke: none;
 }
+
 body.mission-reference .readiness-core { min-height: 282px; }
 body.mission-reference .readiness-core canvas { width: 198px; height: 198px; }
 body.mission-reference .readiness-connectors {
@@ -6434,4 +6435,201 @@ body.mission-reference .resource-code svg path,
 body.mission-reference .resource-code svg circle {
   fill: currentcolor;
   stroke: none;
+}
+
+/* Final responsive cascade guard. Keep this block last. */
+body.mission-reference {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+body.mission-reference main,
+body.mission-reference .detail-layout,
+body.mission-reference .detail-primary,
+body.mission-reference .mission-dashboard,
+body.mission-reference .workspace,
+body.mission-reference .content,
+body.mission-reference .tab-panel,
+body.mission-reference .tab-panel.active {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+body.mission-reference .detail-layout > .tabs {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+body.mission-reference .detail-layout > .tabs::-webkit-scrollbar {
+  display: none;
+}
+
+body.mission-reference .content {
+  padding-inline: clamp(var(--sj-space-4), 2.2vw, var(--sj-space-7));
+}
+
+body.mission-reference .tab-panel > *,
+body.mission-reference .card {
+  max-width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 1439px) {
+  body.mission-reference .detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58px auto auto;
+  }
+
+  body.mission-reference .detail-layout > .tabs {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  body.mission-reference .detail-primary {
+    grid-row: 2;
+    grid-column: 1;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  body.mission-reference .mission-dashboard {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    grid-template-columns: minmax(292px, 0.72fr) minmax(0, 1.7fr);
+    grid-template-rows: auto minmax(430px, auto);
+    grid-template-areas:
+      "route resources"
+      "dynamic resources";
+  }
+
+  body.mission-reference .detail-layout > .rightbar {
+    position: static;
+    display: grid;
+    grid-row: 3;
+    grid-column: 1;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    padding: var(--sj-space-5);
+    overflow: visible;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+    gap: var(--sj-space-5);
+    border-top: 1px solid var(--sj-border);
+    border-left: 0;
+  }
+
+  body.mission-reference .rightbar .side-section,
+  body.mission-reference .rightbar .announcement-center,
+  body.mission-reference .rightbar .todo-center {
+    min-height: 0;
+    overflow: visible;
+  }
+
+  body.mission-reference .announcement-list,
+  body.mission-reference #detailTodoList {
+    max-height: 360px;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 1099px) {
+  body.mission-reference .mission-dashboard {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "route"
+      "dynamic"
+      "resources";
+  }
+
+  body.mission-reference .mission-dashboard-head {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.32fr);
+  }
+
+  body.mission-reference .flight-phase-board {
+    height: auto;
+    min-height: 410px;
+    max-height: 560px;
+  }
+
+  body.mission-reference .resource-command-body {
+    grid-template-columns: minmax(180px, 1fr) minmax(210px, 0.92fr) minmax(180px, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  body.mission-reference .content {
+    padding-inline: var(--sj-space-3);
+  }
+
+  body.mission-reference .mission-dashboard {
+    padding: var(--sj-space-3);
+  }
+
+  body.mission-reference .mission-dashboard-head {
+    grid-template-columns: minmax(0, 1fr) 176px;
+    gap: var(--sj-space-3);
+  }
+
+  body.mission-reference .mission-route-line {
+    grid-template-columns: minmax(104px, 0.8fr) minmax(138px, 1.35fr) minmax(104px, 0.8fr);
+    gap: var(--sj-space-3);
+  }
+
+  body.mission-reference .resource-command-body {
+    overflow-x: visible;
+    grid-template-columns: minmax(160px, 1fr) minmax(188px, 0.9fr) minmax(160px, 1fr);
+    gap: var(--sj-space-2);
+  }
+
+  body.mission-reference .detail-layout > .rightbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  body.mission-reference .mission-dashboard-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.mission-reference .mission-aircraft-summary {
+    display: grid;
+    padding: var(--sj-space-3) 0 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--sj-space-1) var(--sj-space-3);
+    border-top: 1px solid var(--sj-border);
+    border-left: 0;
+  }
+
+  body.mission-reference .mission-route-line {
+    grid-template-columns: minmax(92px, 1fr) minmax(112px, 1.2fr) minmax(92px, 1fr);
+    gap: var(--sj-space-2);
+  }
+
+  body.mission-reference .resource-command-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.mission-reference .readiness-core {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    min-height: 190px;
+  }
+
+  body.mission-reference .resource-column {
+    grid-row: 2;
+  }
+
+  body.mission-reference .readiness-connectors {
+    display: none;
+  }
 }
